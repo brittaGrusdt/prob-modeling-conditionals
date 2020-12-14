@@ -1,0 +1,156 @@
+default:
+  generate_utterances: false
+  generate_tables: false
+  seed_tables: 202008
+  save: true
+  cost_conditional: 0
+  alpha: 3
+  theta: 0.9
+  verbose: true
+  cns: !expr c("A implies C", "C implies A", "A implies -C", "C implies -A", "A || C")
+  packages:  !expr c("./node_modules/conditionalsHelpers",
+                     "./node_modules/conditionalsDefault")
+  model_path: "./model/default-model/default-model.wppl"
+  #seed_webppl: !expr as.numeric(Sys.time())
+  #seed_webppl: 123467
+  seed_webppl: 1602531065
+  add_accept_conditions: true
+  indep_sigma: 0.01 # previously: 0.001
+
+tables:
+  indep_sigma: 0.001
+  n_tables: 10000
+  n_ind_tables: 10000
+  seed: 202009
+  tables_path: "./data/default-model/tables-each-cn-10000.rds"  
+  bias: "none"
+
+## 1. bias configurations ##
+bias_none:
+  target_dir: "./data/default-model"
+  target_fn: "results-none.rds"
+  target_params: "params-none.rds"
+  utts_fn: "utterances-none.rds"
+  vars: !expr c("A", "C")
+  cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
+  bias: "none"
+  n_tables: 2500
+  n_ind_tables: 10000 # 4 times more than for each of the 4 dep. nets
+  tables_fn: "tables-default.rds"
+
+log_likelihood:
+  inherits: bias_none
+  level_max: "log_likelihood"
+  tables_path: "./data/tables-500-per-cns.rds"
+  utt: ""
+  
+bias_lawn:
+  bias: "lawn"
+  target_dir: "./data/special-conditionals"
+  target_fn: "results-lawn.rds"
+  target_params: "params-lawn.rds"
+  utts_fn: "utterances-lawn.rds"
+  vars: !expr c("A", "C")
+  cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
+  n_tables: 2500
+  n_ind_tables: 10000 # 4 times more than for each of the 4 dep. nets
+  tables_fn: "tables-lawn.rds"
+
+sundowners:
+  model_path: "./model/douven-examples/sundowners.wppl"
+  utt: "R > -S"
+  prior_pr: !expr c(0.5)
+  condition_on: !expr NA
+  level_max: "PL"
+  bias: ""
+  add_accept_conditions: FALSE
+  target: "./data/douven-examples/results-sundowners.rds"
+  target_params: "./data/douven-examples/params-sundowners.rds"
+  tables_fn: "tables-sundowners"
+  
+skiing:
+  model_path: "./model/douven-examples/skiing.wppl"
+  utt: "E > S"
+  prior_pe: 0.2
+  evidence: "C"
+  condition_on: !expr c("C")
+  level_max: "PL"
+  bias: ""
+  add_accept_conditions: FALSE
+  target: "./data/douven-examples/results-skiing.rds"
+  target_params: "./data/douven-examples/params-skiing.rds"
+  tables_fn: "tables-skiing"
+
+
+## 2. Level configurations ##
+# @arg utt: 
+#   if set to "p_delta" or "p_rooij", respective value must be
+#   large (see in webppl file) for all states given to the speaker,
+#   if set to "" no condition, just sampled from prior as usual
+speaker:
+  level_max: "speaker"
+  utt: ""
+  target_dir: "./data/default-model"
+  target_fn: "results-speaker.rds"
+  target_params: "params-speaker.rds"
+  n_samples: 10000 # bns sampled from prior
+
+
+# speaker given certain condition,
+# e.g. speaker only gets states where utt is applicable
+# (use utt:"" for no condition) 
+speaker_literal:
+  level_max: "speaker"
+  utt: "A > C" #condition s.t. only states where utt is true are considered
+  target_dir: "./data/default-model"
+  target_fn: "results-speaker-literal.rds"
+  target_params: "params-speaker-literal.rds"
+  n_samples: 10000 # bns sampled from prior
+
+speaker_p_rooij:
+  level_max: "speaker"
+  utt: "p_rooij"
+  target_dir: "./data/default-model"
+  target_fn: "results-speaker-p_rooij-large.rds"
+  target_params: "params-speaker-p_rooij-large.rds"
+  n_samples: 10000 # bns sampled from prior
+
+speaker_c:
+  inherits: speaker
+  target_fn: "results_speaker_given_C.rds"
+  target_params: "params-speaker-given-C.rds"
+  utt: "C"
+# not-conj, when utt=C, but neither A and C nor -A and C are true (in webppl)!
+
+# speaker only sees states where she is un/certain about A and about C
+speaker_uncertain:
+  inherits: speaker
+  target_fn: "results-speaker-uncertain.rds"
+  target_params: "params-speaker-uncertain.rds"
+  utt: "uncertainAandC"
+
+speaker_certain:
+  inherits: speaker
+  target_fn: "results-speaker-certain.rds"
+  target_params: "params-speaker-certain.rds"
+  utt: "certainAandC"
+
+prior:
+  level_max: "prior"
+  utt: ""
+
+priorN:
+  level_max: "priorN"
+  utt: ""
+  target_params: "params-priorN.rds"
+  n_samples: 10000
+
+ll:
+  level_max: "LL"
+  utt: "A > C"
+
+pl:
+  level_max: "PL"
+  utt: "A > C"
+
+# there needs to be 1 blank final line!

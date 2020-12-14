@@ -1,0 +1,76 @@
+// var data = {
+//   "verbose": [true],
+//   "vars": ["A", "C"],
+//   "bias": ["none"]
+//   "tables": //add example here
+// }
+globalStore.thresholds = {t: 0.899, f: 0.0499, theta: data["theta"][0], theta_likely : 0.499}
+var verbose = data["verbose"][0]
+var variables = data["vars"]
+var bias = data["bias"][0]
+globalStore.bias = bias
+var tables_list = data["tables"]
+globalStore.cns = data["cns"]
+
+globalStore.Tables = map(function(obj){
+  var p = Categorical({"vs": obj["vs"], "ps": obj["ps"]})
+  // display(obj["likelihood_if1"])
+  return {
+    id: obj.stimulus_id, Table: p,
+    logL_if_ac: obj.logL_if_ac, logL_if_ca: obj.logL_if_ca,
+    logL_if_anc: obj.logL_if_anc, logL_if_cna: obj.logL_if_cna,
+    logL_ind: obj.logL_ind
+  }
+}, tables_list)
+
+globalStore.indep_sigma = data["indep_sigma"][0]
+
+if(verbose){
+  display("bias: " + bias)
+  display("theta: " + globalStore.thresholds.theta)
+  display("# tables: " + globalStore.Tables.length)
+  display("vars: " + variables)
+}
+
+var variables = reduce(function(token, acc){
+  acc.concat([[token, negate(token)]])
+}, [], variables)
+
+var dependent_nets = _.without(globalStore.cns, "A || C")
+globalStore.dep_cns = dependent_nets;
+
+if(verbose){
+  display('# cns: ' + globalStore.cns.length)
+}
+
+var powerset = get_var_powerset(variables, false)
+var utterances = make_utterances(powerset)
+if(verbose){
+  display("all utterances:")
+  map(display, utterances)
+  display('# all utterances: ' + utterances.length)
+}
+
+var all_states = state_prior(bias).support()
+if(verbose){
+  display('# states: ' + all_states.length)
+}
+
+var utts_to_remove = filter(function(u){
+  !any(function(s){meaning(u, s["bn"]["table"])}, all_states)
+}, utterances)
+
+if(verbose){
+  display('# utts without corresponding state: ' + utts_to_remove.length)
+  display("removed utterances:")
+  map(display, utts_to_remove)
+}
+
+var utterances = filter(function(u){utts_to_remove.indexOf(u) == -1}, utterances)
+if(verbose){
+  display("included utterances:")
+  map(display, utterances)
+  display('# included utterances: ' + utterances.length)
+}
+
+utterances
