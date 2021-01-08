@@ -1,6 +1,5 @@
 // Parameters
-// var thresholds = {t: 0.899, f: 0.0499, theta: 0.899, theta_likely : 0.499}
-globalStore.thresholds = {t: 0.899, f: 0.0499, theta: data["theta"][0], theta_likely : 0.499}
+globalStore.thresholds = {theta: data["theta"][0], theta_likely : 0.5}
 
 // states + utterances
 globalStore.cns = data["cns"]
@@ -10,7 +9,6 @@ globalStore.utterances = data["utterances"]
 var tables_list = data["tables"]
 globalStore.Tables = map(function(obj){
   var p = Categorical({"vs": obj["vs"], "ps": obj["ps"]})
-  // display(obj["likelihood_if1"])
   return {
     id: obj.stimulus_id, Table: p,
     logL_if_ac: obj.logL_if_ac, logL_if_ca: obj.logL_if_ca,
@@ -22,7 +20,6 @@ globalStore.Tables = map(function(obj){
 globalStore.alpha = data["alpha"][0]
 globalStore.cost_conditional = data["cost_conditional"][0]
 
-// var degree = data["degree"][0]
 var BIAS = data["bias"][0]
 globalStore.bias = BIAS
 var UTT = data["utt"][0]
@@ -85,19 +82,21 @@ if(LEVEL_MAX == "speaker"){
   // draw n_samples from prior or take all bns from support of prior
   var bns = n_samples != 0 ? repeat(n_samples, function(){sample(prior_conditioned)})
                            : all_bns;
-  display('nb bns considered for speaker:' + bns.length)
-  var bns_uniq = []
-  var bn_ids = reduce(function(bn, acc){
-    var incl = acc.includes(bn.id);
-    if(!incl){
-      bns_uniq.push(bn)
-      acc.concat([bn.id])
-    } else{
-      acc.concat([])
-    }
-  }, [], bns);
-  display('# unique bns that are input to speaker(where condition, if any, holds): ' + bns_uniq.length)
-  var distributions = run_speaker(bns_uniq)
+  // display('nb bns considered for speaker:' + bns.length)
+  // var bns_uniq = []
+  // var bn_ids = reduce(function(bn, acc){
+  //   var idx = acc.indexOf(bn.id);
+  //   if(idx == -1){
+  //     bns_uniq.push(bn)
+  //     acc.concat([bn.id])
+  //   } else {
+  //       acc.concat([])
+  //   }
+  // }, [], bns);
+
+  // display('# unique bns that are input to speaker(where condition, if any, holds): ' + bns_uniq.length)
+  // var distributions = run_speaker(bns_uniq)
+  var distribution = run_speaker(bns)
   distributions
 } else if(LEVEL_MAX == "ll_all_utts"){
   var distributions = {"ll": map(wrap_ll, globalStore.utterances)}

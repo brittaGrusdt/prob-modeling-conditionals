@@ -1,4 +1,4 @@
-epsilon=0.0000001
+EPSILON = 0.0000001
 SEP = .Platform$file.sep
 
 save_data <- function(data, target_path){
@@ -49,15 +49,7 @@ generate_utts <- function(params){
   return(utterances)
 }
 
-# @data.speaker: object with columns: bn_id, probs, utterance
-best_utterance = function(data.speaker){
-  data.speaker.best <- data.speaker %>% group_by(bn_id) %>%
-    mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
-    unnest(u_best) %>% select(-p_best)
-  return(data.speaker.best)
-}
-
-# instead of all different utterances, categorize them in a few chunks (for plotting)
+# instead of all different utterances, chunk them into categories (for plotting)
 chunk_utterances <- function(data, utts_kept=c()){
   levels = c("likely + literal", "conditional", "literal", "conjunction");
   s = paste(utts_kept, collapse="");
@@ -95,9 +87,10 @@ chunk_cns <- function(data) {
 
 # Probabilities -----------------------------------------------------------
 #@arg vars: list of variables, if more than one, only states where all hold
-# are retained!
-# data must be in long format, such that cell is one column and marginals can
-# be computed for any cell entries, returned object is in wide format
+# are retained
+# @arg data: in long format, such that cell is one column and marginals can
+# be computed for any cell entries
+# @return: in wide format
 marginalize <- function(data, vars){
   df <- data %>% filter_vars(vars)
   df <- df %>%  mutate(p=case_when(keep ~ val, TRUE ~ 0)) %>%
@@ -107,10 +100,10 @@ marginalize <- function(data, vars){
   return(df)
 }
 
-# takes the expected value of column *p* with probability in column *prob*
-# args:
-#   df_wide; tibble with one bn per row, at least columns *p*, *prob*, *level*
-#   value_str: str describing value, e.g. *P(A)* for expected val of P(A)
+# takes the expected value of column 'p' with probability in column 'prob'
+# @args:
+#   df_wide; tibble with one bn per row, at least columns: p, prob, level
+#   value_str: str describing value, e.g. 'P(A)' for expected val of P(A)
 expected_val <- function(df_wide, value_str){
   evs <- df_wide %>% mutate(ev_prod=p * prob)
   evs <- evs %>% group_by(level)
@@ -151,7 +144,25 @@ compute_cond_prob <- function(distr_wide, prob){
   }
   return(distr)
 }
-
+# @arg df: data frame containing columns `AC`, `A-C`, `-AC`
+add_probs <- function(df){
+  df <- df %>% mutate(p_a = AC + `A-C`, p_c = AC + `-AC`,
+                      p_na = `-AC` + `-A-C`, p_nc = `A-C` + `-A-C`) %>%
+    mutate(p_c_given_a = AC / p_a,
+           p_c_given_na = `-AC` / p_na,
+           p_a_given_c = AC / p_c, 
+           p_a_given_nc = `A-C` / p_nc, 
+           p_nc_given_a = `A-C`/p_a,
+           p_nc_given_na = `-A-C`/p_na,
+           p_na_given_c = `-AC`/p_c,
+           p_na_given_nc = `-A-C`/p_nc,
+           p_likely_a = p_a,
+           p_likely_na=p_na,
+           p_likely_c = p_c,
+           p_likely_nc=p_nc
+    )
+  return(df)
+}
 
 # model ------------------------------------------------------------------
 add_model_params <- function(df, params){
@@ -193,13 +204,6 @@ likelihood <- function(df_wide, sigma_indep){
     select(-p_c_given_na, -p_c_given_a, -p_a_given_c, -p_a_given_nc, -pa, -pc,
            -p_nc_given_a, -p_na_given_c, -p_nc_given_na, -p_na_given_nc)
   return(df)
-}
-
-add_meaning_probs = function(df.wide){
-  return(df.wide %>%
-    compute_cond_prob("P(C|A)") %>% rename(pc_given_a=p) %>%
-    compute_cond_prob("P(A|C)") %>% rename(pa_given_c=p) %>%
-    mutate(pa=`AC`+`A-C`, pc=`AC`+`-AC`));
 }
 
 # other functions ---------------------------------------------------------
@@ -250,7 +254,6 @@ configure <- function(config_keys) {
 }
 
 # plotting functions ------------------------------------------------------
-
 plot_evs <- function(data){
   p <- data %>% ggplot() +
     geom_bar(mapping = aes(x=level, y=ev, fill=level), stat="identity", position="dodge") +
@@ -261,15 +264,16 @@ plot_evs <- function(data){
   return(p)
 }
 
-plot_speaker <- function(data, fn, w, h, legend_pos="none", facets=TRUE,
-                         xlab="", ylab=""){
+plot_speaker <- function(data, fn, w, h, plot_dir, legend_pos="none",
+                         facets=TRUE, xlab="", ylab="") {
   df <- data %>% mutate(p=round(as.numeric(p), 2))
   if(xlab==""){xlab = TeX("$\\frac{1}{|S|} \\cdot \\sum_{s \\in S} P_S(u|s)$")}
   if(ylab==""){ylab = "utterance"}
   
-  if("cn" %in% colnames(df)) {p <- df %>%
-    ggplot(aes(y=utterance, x=p, fill=cn)) +
-    guides(fill=guide_legend(title="causal net"))
+  if("cn" %in% colnames(df)) {
+    p <- df %>%
+      ggplot(aes(y=utterance, x=p, fill=cn)) +
+      guides(fill=guide_legend(title="causal net"))
   } else if("speaker_condition" %in% colnames(df)) {
     p <-  df %>% ggplot(aes(y=utterance, x=p, fill=speaker_condition))
   } else {
@@ -278,9 +282,121 @@ plot_speaker <- function(data, fn, w, h, legend_pos="none", facets=TRUE,
   p <- p +
     geom_bar(stat="identity", position=position_dodge(preserve = "single"))  +
     labs(x=xlab, y=ylab) + theme_bw(base_size=25)
-  if(facets) p <- p + facet_wrap(~speaker_condition)
+  if(facets) {p <- p + facet_wrap(~speaker_condition)
+  }
   p <- p + theme(axis.text.y=element_text(size=15), legend.position=legend_pos)
   
-  ggsave(paste(PLOT_DIR, fn, sep=SEP), p, width=w, height=h)
+  ggsave(paste(plot_dir, fn, sep=SEP), p, width=w, height=h)
   return(p)
+}
+
+# @arg posterior: in long format, must have columns *cell* and *val*
+voi_default <- function(posterior, params){
+  df = posterior %>% ungroup() %>% dplyr::select(-starts_with("p_"))
+  df.wide = df %>% pivot_wider(names_from="cell", values_from="val") %>%
+    add_probs() %>% dplyr::select(!starts_with("p_likely")) %>%
+    group_by(level)
+  
+  # bns where certain about both (=uncertain about none) is true
+  df.certain_both = df.wide %>%
+    filter((p_a >= params$theta | p_a < 1-params$theta) &
+             (p_c >=params$theta | p_c < 1-params$theta)) %>%
+    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
+    add_column(key="certain_both")
+  
+  df.uncertain_only_a = df.wide %>%
+    filter((p_a > 1-params$theta & p_a < params$theta) &
+           (p_c <= 1-params$theta | p_c >= params$theta)) %>%
+    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
+    add_column(key="uncertain_only_a")
+  
+  df.uncertain_only_c = df.wide %>%
+    filter((p_c > 1-params$theta & p_c < params$theta) &
+           (p_a <= 1-params$theta | p_a >= params$theta)) %>%
+    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
+    add_column(key="uncertain_only_c")
+  
+  df.uncertain_both = df.wide %>%
+    filter((p_c < params$theta & p_c > 1-params$theta) &
+           (p_a < params$theta & p_a > 1-params$theta)) %>%
+    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
+    add_column(key="uncertain_both")
+  
+  # expected value P(A)
+  evs = df.wide %>%
+    transmute(ev_a=prob*p_a, ev_c=prob*p_c, ev_a_given_c = prob * p_a_given_c,
+              ev_nc_given_na= prob * p_nc_given_na) %>%
+    summarize(ev_a=sum(ev_a), ev_c=sum(ev_c), ev_a_given_c=sum(ev_a_given_c),
+              ev_nc_given_na=sum(ev_nc_given_na), .groups="keep") %>%
+    pivot_longer(cols=c("ev_a", "ev_c", "ev_a_given_c", "ev_nc_given_na"),
+                 names_to="key", values_to="ev")
+  
+  results <- bind_rows(df.uncertain_both, df.uncertain_only_a,
+                       df.uncertain_only_c, df.certain_both, evs)
+  if(params$level_max == "prior"){
+    levels = c("prior")
+  } else {
+    levels = c("prior", "LL", "PL")
+  }
+  results = results %>% filter(level %in% levels)
+  
+  if(params$save){
+    results %>%
+      save_data(paste(params$target_dir, .Platform$file.sep,
+                      str_split(params$target_fn, "\\.")[[1]][1],
+                      "-prior-LL-PL-vois.rds", sep=""))
+  }
+  return(results)
+}
+# Acceptability/Assertability conditions ----------------------------------
+# p_rooij: (P(e|i) - P(e|¬i)) / (1-P(e|¬i))
+# p_delta: P(e|i) - P(e|¬i)
+acceptability_conditions <- function(data_wide){
+  df <- data_wide %>% compute_cond_prob("P(C|A)") %>% rename(p_c_given_a=p) %>% 
+    compute_cond_prob("P(C|-A)") %>% rename(p_c_given_na=p) %>%
+    mutate(p_delta=round(p_c_given_a - p_c_given_na, 5),
+           p_nc_given_na=round(1-p_c_given_na, 5),
+           p_rooij=case_when(p_nc_given_na == 0 ~ round(p_delta/0.00001, 5),
+                             TRUE ~ round(p_delta/p_nc_given_na, 5)),
+           pc=`AC` + `-AC`,
+           p_diff=round(p_c_given_a - pc, 5)) %>%
+    select(-p_nc_given_na, -p_c_given_a, -p_c_given_na, -pc)
+  return(df)
+}
+
+# Douven examples ---------------------------------------------------------
+voi_douven <- function(posterior, params, model){
+  if(model=="skiing"){voi <- voi_skiing(posterior, params)}
+  else if(model=="sundowners"){voi <- voi_sundowners(posterior, params)}
+  return(voi)
+}
+
+voi_skiing <- function(posterior, params){
+  pe <- marginalize(posterior, c("E")) 
+  ev_pe <- pe %>% expected_val("E") %>% rename(value=ev, key=p) %>% 
+    mutate(alpha=params$alpha, cost=params$cost_conditional, pe=params$prior_pe)
+  if(params$save){
+    ev_pe %>% save_data(paste(params$target_dir, .Platform$file.sep,
+                              params$target, "-voi.rds", sep=""))
+  }
+  return(ev_pe)
+}
+
+voi_sundowners <- function(posterior, params){
+  pr <- marginalize(posterior, c("R"))
+  ev_pr <- pr %>% expected_val("R") %>% rename(value=ev, key=p)
+  
+  prs <- marginalize(posterior, c("R", "S"))
+  ev_prs <- prs %>% expected_val("R and S") %>% rename(value=ev, key=p)
+  
+  vois <- bind_rows(ev_prs, ev_pr)  %>% 
+    mutate(alpha=params$alpha, cost=params$cost_conditional, 
+           pr1=params$prior_pr[1],
+           pr2=params$prior_pr[2],
+           pr3=params$prior_pr[3]) %>% nest(prior_pr=c(pr1,pr2,pr3))
+  if(params$save){
+    vois %>%  save_data(paste(params$target_dir, .Platform$file.sep,
+                              params$target, "-voi.rds", sep=""))
+  }
+  return(vois)
 }

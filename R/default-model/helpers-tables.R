@@ -37,8 +37,7 @@ create_dependent_tables <- function(params, cns){
     tables <- probs %>% dplyr::select(-cond1, -cond2, -marginal) %>%
       rowid_to_column("id")
     tables_long <- tables %>%
-      gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val") #%>%
-      #mutate(val=round(val, 4))
+      gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val")
     tables_wide <- tables_long %>% group_by(id) %>%
       summarise(ps = list(val), .groups = 'drop') %>% add_column(cn=(!! cn)) %>%
       mutate(vs=list(c("AC", "A-C", "-AC", "-A-C"))) %>% dplyr::select(-id)
@@ -51,7 +50,6 @@ create_dependent_tables <- function(params, cns){
 }
 
 create_independent_tables <- function(params){
-  # digits=4
   tables <- tibble(pc=runif(params$n_ind_tables), pa=runif(params$n_ind_tables)) %>%
     rowid_to_column("id") %>%
     mutate(upper_bound = pmin(pa, pc),
@@ -65,13 +63,12 @@ create_independent_tables <- function(params){
     select(-upper_bound, -lower_bound, -pa, -pc, -s)
   tables.mat = tables  %>% select(-id) %>% as.matrix() 
   
-  tables = prop.table(tables.mat + epsilon, 1) %>% as_tibble() %>%
+  tables = prop.table(tables.mat + EPSILON, 1) %>% as_tibble() %>%
     mutate(n=AC + `A-C` + `-AC` + `-A-C`) %>%
     add_column(id=tables$id)
            
   tables_long <- tables %>%
-    gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val")# %>% 
-    # mutate(val=round(val, 4))
+    gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val")
   tables_wide <- tables_long %>% group_by(id) %>%
     summarise(ps = list(val), .groups = 'drop') %>% add_column(cn="A || C") %>% 
     mutate(vs=list(c("AC", "A-C", "-AC", "-A-C"))) %>%
@@ -101,16 +98,6 @@ create_tables <- function(params){
   tables %>% save_data(params$tables_path)
   return(tables)
 }
-# 
-# filter_tables <- function(tables, params){
-#   if(is.na(params$nor_beta)){
-#     df <- tables %>% filter(is.na(nor_beta) & is.na(nor_theta))
-#   } else{
-#     df <- tables %>% filter(nor_beta == params$nor_beta & nor_theta == params$nor_theta)
-#   }
-#   df <- df %>% filter(n_tables == params$n_tables & indep_sigma == params$indep_sigma)
-#   return(df)
-# }
 
 unnest_tables <- function(tables){
   tables <- tables %>% rowid_to_column()
@@ -118,29 +105,8 @@ unnest_tables <- function(tables){
   return(tables_long)
 }
 
-# # TODO: compare with same function in helper-functions.R!
-# adapt_bn_ids <- function(data_wide){
-#   # makes sure that bn_ids are identical across levels PL/LL/prior
-#   prior <- data_wide %>% filter(level=="prior") %>% arrange(cn, `AC`, `-AC`, `A-C`, `-A-C`)
-#   ll <- data_wide %>% filter(level=="LL") %>% arrange(cn, `AC`, `-AC`, `A-C`, `-A-C`)
-#   pl <- data_wide %>% filter(level=="PL") %>% arrange(cn, `AC`, `-AC`, `A-C`, `-A-C`)
-#   df <- bind_rows(ll, prior)
-#   
-#   # not all Bayes nets that are in the prior also occur in the literal/pragmatic listener
-#   # (but there is no diff btw. those in LL/PL)
-#   idx_dups <- df %>% dplyr::select(-level, -prob, -bn_id) %>% duplicated()
-#   duplicates_prior <- df[idx_dups, ] %>%  arrange(cn, `AC`, `AC`, `A-C`, `-AC`, `-A-C`)
-#   duplicates_prior$level %>% unique()
-#   
-#   # pl <- pl %>% mutate(bn_id=duplicates_prior$bn_id)
-#   ll <- ll %>% mutate(bn_id=duplicates_prior$bn_id)
-#   
-#   df <- bind_rows(prior, ll, pl)
-#   return(df)
-# }
-
+# data must be in long format with columns 'cell', 'val'
 plot_tables <- function(data){
-  # data must be in long format with columns *cell* and *val*
   cns <- data$cn %>% as.factor() %>% levels()
   plots <- list(); idx = 1
   for(causal_net in cns){
@@ -172,7 +138,8 @@ plot_tables <- function(data){
   return(plots)
 }
 
-plot_tables_all_cns <- function(tables_path, plot_dir, w, h){
+# plot densities of generated tables for different causal nets
+plot_tables_cns <- function(tables_path, plot_dir, w, h){
   tables.wide <- readRDS(tables_path) %>% unnest_tables() %>%
     rename(bn_id=rowid) %>% group_by(bn_id, cn) %>% 
     pivot_wider(names_from = cell, values_from = val) %>% ungroup()
@@ -190,18 +157,18 @@ plot_tables_all_cns <- function(tables_path, plot_dir, w, h){
     ungroup() %>% 
     mutate(cell=factor(cell, levels=c("AC", "A-C", "-AC", "-A-C")),
            cn=case_when(cn=="A || C" ~ "A,C independent",
+                        cn=="A implies -C" ~ "A implies ¬C",
                         TRUE ~ cn),
            cn=as.factor(cn)) %>% 
     group_by(bn_id, cn)
   
-  # tables must be in long format with columns *cell* and *val*
   all_plots = list()
-  cns <- list(c("A,C independent"), c("A implies -C", "C implies -A"), c("A implies C", "C implies A"))
-  cns.short <- c("indep", "anc-cna", "ac-ca")
+  cns <- list(c("A,C independent"), c("A implies ¬C"), c("A implies C"))
+  cns.short <- c("indep", "anc", "ac")
   for(i in seq(1,3)) {
     p <- tables.long %>% filter(cn %in% cns[[i]]) %>%
       ggplot(aes(x=val,  fill = cn)) +
-      geom_density(alpha=0.5) +
+      geom_density() +
       facet_wrap(~cell, ncol = 2, scales = "free",
                  labeller = labeller(cell = c(`AC` = "P(A,C)", `A-C` = "P(A,¬C)",
                                               `-AC`= "P(¬A,C)", `-A-C` = "P(¬A,¬C)"))
@@ -209,7 +176,8 @@ plot_tables_all_cns <- function(tables_path, plot_dir, w, h){
       scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) +
       labs(x="probability", y="density") +
       theme_classic(base_size = 20) +
-      theme(legend.position = "bottom")
+      theme(legend.position = "none") +
+      ggtitle(cns[[i]])
     all_plots[[i]] = p
     
     save_to = paste(plot_dir, paste("tables-", cns.short[[i]], ".png", sep=""), sep=SEP)
@@ -219,28 +187,3 @@ plot_tables_all_cns <- function(tables_path, plot_dir, w, h){
   return(all_plots)
 }
 
-
-makeTables <- function(){
-  params <- configure(c("bias_none", "tables"))
-  tables <- create_tables(params)
-  return(tables)  
-}
-
-# params = configure(c("bias_none", "tables"))
-# TABLES <- readRDS("./data/default-model/tables-default.rds") %>%
-#   select(id, cn, vs, ps) %>% unnest(c(ps, vs)) %>% group_by(id)
-# TABLES.wide <-  TABLES %>% pivot_wider(names_from = vs, values_from = ps)  
-
-
-
-
-
-
-
-
-# tables_data <- marginalize(tables_long %>% rename(level=cn), c("A")) %>%
-#   mutate(p=case_when(p==0 ~ 0.00001, TRUE~p), `P(C|A)`=AC/p)
-# tables_data %>% group_by(level) %>% summarise(m=mean(`P(C|A)`))
-
-# df <- tables %>% spread(key=cell, val=val) %>% mutate(pca=AC/(AC+`A-C`), pac=AC/(AC+`-AC`))
-# df %>% group_by(cn) %>% summarise(mean_pca=mean(pca, na.rm = TRUE), mean_pac=mean(pac, na.rm = TRUE))

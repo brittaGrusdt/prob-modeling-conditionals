@@ -1,6 +1,4 @@
 default:
-  generate_utterances: false
-  generate_tables: false
   seed_tables: 202008
   save: true
   cost_conditional: 0
@@ -12,18 +10,9 @@ default:
                      "./node_modules/conditionalsDefault")
   model_path: "./model/default-model/default-model.wppl"
   #seed_webppl: !expr as.numeric(Sys.time())
-  #seed_webppl: 123467
   seed_webppl: 1602531065
   add_accept_conditions: true
-  indep_sigma: 0.01 # previously: 0.001
-
-tables:
-  indep_sigma: 0.001
-  n_tables: 10000
-  n_ind_tables: 10000
-  seed: 202009
-  tables_path: "./data/default-model/tables-each-cn-10000.rds"  
-  bias: "none"
+  indep_sigma: 0.001 # previously: 0.001
 
 ## 1. bias configurations ##
 bias_none:
@@ -64,8 +53,11 @@ sundowners:
   level_max: "PL"
   bias: ""
   add_accept_conditions: FALSE
+  target_dir: "./data/douven-examples"
   target: "./data/douven-examples/results-sundowners.rds"
+  target_fn: "results-sundowners.rds"
   target_params: "./data/douven-examples/params-sundowners.rds"
+  target_vois: "results-sundowners-voi.rds"
   tables_fn: "tables-sundowners"
   
 skiing:
@@ -77,8 +69,11 @@ skiing:
   level_max: "PL"
   bias: ""
   add_accept_conditions: FALSE
+  target_dir: "./data/douven-examples"
   target: "./data/douven-examples/results-skiing.rds"
+  target_fn: "results-skiing.rds"
   target_params: "./data/douven-examples/params-skiing.rds"
+  target_vois: "results-skiing-voi.rds"
   tables_fn: "tables-skiing"
 
 
@@ -93,7 +88,7 @@ speaker:
   target_dir: "./data/default-model"
   target_fn: "results-speaker.rds"
   target_params: "params-speaker.rds"
-  n_samples: 10000 # bns sampled from prior
+  n_samples: 20000 # bns sampled from prior
 
 
 # speaker given certain condition,
@@ -105,7 +100,7 @@ speaker_literal:
   target_dir: "./data/default-model"
   target_fn: "results-speaker-literal.rds"
   target_params: "params-speaker-literal.rds"
-  n_samples: 10000 # bns sampled from prior
+  n_samples: 20000 # bns sampled from prior
 
 speaker_p_rooij:
   level_max: "speaker"
@@ -113,7 +108,7 @@ speaker_p_rooij:
   target_dir: "./data/default-model"
   target_fn: "results-speaker-p_rooij-large.rds"
   target_params: "params-speaker-p_rooij-large.rds"
-  n_samples: 10000 # bns sampled from prior
+  n_samples: 20000 # bns sampled from prior
 
 speaker_c:
   inherits: speaker
@@ -140,10 +135,12 @@ prior:
   utt: ""
 
 priorN:
+  inherits: bias_none
+  target_fn: "results-none-priorN.rds"
+  target_params: "params-none-priorN.rds"
   level_max: "priorN"
   utt: ""
-  target_params: "params-priorN.rds"
-  n_samples: 10000
+  n_samples: 20000
 
 ll:
   level_max: "LL"
@@ -154,3 +151,4 @@ pl:
   utt: "A > C"
 
 # there needs to be 1 blank final line!
+

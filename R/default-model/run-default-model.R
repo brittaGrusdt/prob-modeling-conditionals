@@ -1,23 +1,16 @@
 source("R/default-model/helpers-tables.R")
 source("R/helpers-webppl.R")
 source("R/helper-functions.R")
-source("R/helpers-values-of-interest.R")
 library(rwebppl)
 library(tidyverse)
 
-# params <- configure(c("bias_none", "prior"))
-# params <- configure(c("bias_none", "priorN"))
-# params <- configure(c("bias_none", "ll"))
-params <- configure(c("bias_none", "pl"))
+# params <- configure(c("bias_none", "pl"))
 # params <- configure(c("bias_none", "speaker"))
-# params <- configure(c("bias_none", "speaker_literal"))
+params <- configure(c("bias_none", "speaker_literal"))
 # params <- configure(c("bias_none", "speaker_p_rooij"))
 # params <- configure(c("bias_none", "speaker_uncertain"))
 # params <- configure(c("bias_none", "speaker_certain"))
-
-# params <- configure(c("bias_none", "log_likelihood"))
-# params <- configure(c("bias_lawn", "pl"))
-
+# params <- configure(c("priorN"))
 
 # Setup -------------------------------------------------------------------
 dir.create(params$target_dir, recursive = TRUE)
@@ -27,11 +20,10 @@ params$utts_path <- file.path(params$target_dir, params$utts_fn, fsep = .Platfor
 
 ##---- Generate/Retrieve tables ----##
 if(!"tables_path" %in% names(params)){
-  # params$tables_path <- here("data", params$tables_fn)
   params$tables_path <- paste(params$target_dir, params$tables_fn, sep=.Platform$file.sep)
 }
 
-if(params$generate_tables || !file.exists(params$tables_path)){
+if(!file.exists(params$tables_path)){
   tables <- create_tables(params)
 } else {
   tables <- readRDS(params$tables_path)
@@ -47,7 +39,7 @@ generate_utts <- function(params){
   utterances %>% save_data(params$utts_path)
   return(utterances)
 }
-if(params$generate_utterances || !file.exists(params$utts_path)){
+if(!file.exists(params$utts_path)){
   utterances <- generate_utts(params)
 } else {
   utterances <- readRDS(params$utts_path)
@@ -59,15 +51,8 @@ params$utterances <- utterances
 posterior <- run_webppl(params$model_path, params)
 
 # structure + save data
-# update pathes depending on configuration
-if(! params$level_max %in% c("speaker", "literal-speaker")) {
-  params$target <- file.path(
-    params$target_dir,
-    paste(str_sub(params$target_fn, 1, -5), "-", params$level_max, ".rds", sep=""),
-          fsep=.Platform$file.sep
-    )
-  params$target_params <- str_replace(params$target, "results", "params")
-}
+params$target <- file.path(paste(params$target_dir, params$target_fn, sep=.Platform$file.sep))
+params$target_params <- str_replace(params$target, "results", "params")
 
 # restructure data and save
 if(params$level_max == "speaker") {
@@ -81,7 +66,6 @@ if(params$level_max == "speaker") {
                  logL=posterior$logL$value)
 } else {
   data <- posterior %>% structure_listener_data(params)
-  # trust <- data %>% listener_beliefs("PL", params)
-  # data_voi <- voi_default(data, params)
+  data_voi <- voi_default(data, params)
 }
 

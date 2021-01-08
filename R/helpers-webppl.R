@@ -1,3 +1,4 @@
+# formats webppl distributions of P(s|u) that is for listeners + prior
 webppl_distrs_to_tibbles <- function(posterior){
   posterior_tibbles <- map2(posterior, names(posterior), function(x, y){
     x <- x %>% rowid_to_column("bn_id") 
@@ -53,7 +54,6 @@ run_webppl <- function(path_wppl_file, params){
 
 structure_listener_data <- function(posterior, params){
   df_long <- posterior %>% webppl_distrs_to_tibbles() %>%
-              mutate(val=case_when(val<0.000001 ~ 0.000001, TRUE ~ val)) %>% 
               add_column(bias=params$bias)
   if(params$add_accept_conditions){
     df_wide <- df_long %>% spread(key=cell, val=val) %>%
@@ -71,9 +71,8 @@ structure_listener_data <- function(posterior, params){
       pivot_longer(cols=c(AC, `A-C`, `-AC`, `-A-C`),
                    names_to="cell", values_to="val")
   }
-  
   if(params$save){
-    df_long %>% save_data(params$target)
+    df_long %>% save_data(paste(params$target_dir, params$target_fn, sep= .Platform$file.sep))
     params %>% save_data(params$target_params)
   }
   return(df_long)
@@ -155,8 +154,8 @@ structure_speaker_data <- function(posterior, params){
   return(df)
 }
 
+# @distrs: long format with columns: utterance
 average_speaker <- function(distrs, params){
-  # @distrs: long format with columns: utterance
   data <- distrs %>% group_by(utterance)
   data.cns <- distrs %>% group_by(utterance, cn)
   df <- data %>% summarise(avg=mean(probs)) %>% add_column(bias=params$bias)
