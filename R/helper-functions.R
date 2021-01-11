@@ -54,7 +54,8 @@ chunk_utterances <- function(data, utts_kept=c()){
   levels = c("likely + literal", "conditional", "literal", "conjunction");
   s = paste(utts_kept, collapse="");
   if(str_detect(s, ">") || str_detect(s, "if")){
-    levels = c("likely + literal", "other conditional", "literal", "conjunction");
+    levels = c("likely + literal", "other conditional", "literal", "conjunction",
+               utts_kept);
   }
   data = data %>% mutate(
     utterance = case_when(
@@ -64,11 +65,11 @@ chunk_utterances <- function(data, utts_kept=c()){
       str_detect(utterance, "and") ~ "conjunction",
       TRUE ~ "literal"
     ),
-    utterance = str_replace(utterance, "-", "¬"),
+    utterance = str_replace_all(utterance, "-", "¬"),
     utterance = str_replace(utterance, ">", "->"),
     utterance = factor(utterance, levels=
                          c(map(utts_kept, function(s){
-                           s <- str_replace(s, "-", "¬")
+                           s <- str_replace_all(s, "-", "¬")
                            return(str_replace(s, ">", "->"))
                          }),
                          levels)
@@ -187,7 +188,11 @@ likelihood <- function(df_wide, sigma_indep){
     compute_cond_prob("P(C|-A)") %>% rename(p_c_given_na=p) %>% 
     compute_cond_prob("P(A|C)") %>% rename(p_a_given_c=p) %>% 
     compute_cond_prob("P(A|-C)") %>% rename(p_a_given_nc=p) %>%
-    mutate(pa=AC+`A-C`, pc=AC+`-AC`)  
+    mutate(pa=AC+`A-C`, pc=AC+`-AC`,
+           ind.lower=case_when(1-(pa+pc) < 0 ~ abs(1-(pa+pc)),
+                               TRUE ~ 0),
+           ind.upper=pmin(pa, pc))
+  
   df <- df %>% 
     mutate(
         p_nc_given_a = 1 - p_c_given_a,
@@ -195,7 +200,7 @@ likelihood <- function(df_wide, sigma_indep){
         p_nc_given_na = 1 - p_c_given_na,
         p_na_given_nc = 1 - p_a_given_nc,
         
-        logL_ind=log(dtruncnorm(x=`AC`, a=0, b=1, mean=pa*pc, sd=sigma_indep)),
+        logL_ind=log(dtruncnorm(x=`AC`, a=ind.lower, b=ind.upper, mean=pa*pc, sd=sigma_indep)),
         logL_if_ac = log(dbeta(p_c_given_a, 10, 1))+log(dbeta(p_c_given_na, 1, 10)),
         logL_if_anc = log(dbeta(p_nc_given_a, 10, 1)) + log(dbeta(p_nc_given_na, 1, 10)),
         logL_if_ca = log(dbeta(p_a_given_c, 10, 1)) + log(dbeta(p_a_given_nc, 1, 10)),
@@ -293,33 +298,32 @@ plot_speaker <- function(data, fn, w, h, plot_dir, legend_pos="none",
 # @arg posterior: in long format, must have columns *cell* and *val*
 voi_default <- function(posterior, params){
   df = posterior %>% ungroup() %>% dplyr::select(-starts_with("p_"))
-  df.wide = df %>% pivot_wider(names_from="cell", values_from="val") %>%
+  df.wide = df %>% group_by(bn_id) %>%
+    pivot_wider(names_from="cell", values_from="val") %>%
     add_probs() %>% dplyr::select(!starts_with("p_likely")) %>%
     group_by(level)
   
+  theta=params$theta
+  df = df.wide %>% mutate(uncertainty =
+    case_when((p_a<theta & p_a>1-theta) & (p_c<theta & p_c>1-theta) ~ "both",
+            (p_a<theta & p_a>1-theta) ~ "only A",
+            (p_c<theta & p_c>1-theta) ~ "only C",
+            TRUE ~ "none"))
   # bns where certain about both (=uncertain about none) is true
-  df.certain_both = df.wide %>%
-    filter((p_a >= params$theta | p_a < 1-params$theta) &
-             (p_c >=params$theta | p_c < 1-params$theta)) %>%
-    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
-    add_column(key="certain_both")
+  df.certain_both = df %>% filter(uncertainty == "none") %>%
+    summarize(ev=sum(prob), .groups="drop_last") %>% 
+    add_column(key="uncertain_none")
   
-  df.uncertain_only_a = df.wide %>%
-    filter((p_a > 1-params$theta & p_a < params$theta) &
-           (p_c <= 1-params$theta | p_c >= params$theta)) %>%
-    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
-    add_column(key="uncertain_only_a")
+  df.uncertain_only_a = df %>% filter(uncertainty == "only A") %>%
+    summarize(ev=sum(prob), .groups="drop_last") %>%
+    add_column(key="uncertain_only_A")
   
-  df.uncertain_only_c = df.wide %>%
-    filter((p_c > 1-params$theta & p_c < params$theta) &
-           (p_a <= 1-params$theta | p_a >= params$theta)) %>%
-    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
-    add_column(key="uncertain_only_c")
+  df.uncertain_only_c = df %>% filter(uncertainty == "only C") %>%
+    summarize(ev=sum(prob), .groups="drop_last") %>%
+    add_column(key="uncertain_only_C")
   
-  df.uncertain_both = df.wide %>%
-    filter((p_c < params$theta & p_c > 1-params$theta) &
-           (p_a < params$theta & p_a > 1-params$theta)) %>%
-    summarize(ev = sum(prob), .groups="keep") %>% arrange(desc(ev)) %>%
+  df.uncertain_both = df %>% filter(uncertainty == "both") %>%
+    summarize(ev=sum(prob), .groups="drop_last") %>%
     add_column(key="uncertain_both")
   
   # expected value P(A)

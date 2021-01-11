@@ -7,26 +7,29 @@ library(grid)
 source("R/helper-functions.R")
 source("R/default-model/helpers-tables.R")
 
-data_dir = here("data", "default-model")
-plot_dir = here("figs")
+SEP = .Platform$file.sep
+data_dir = here("data", "default-model", "paper-config")
 params <- read_rds(paste(data_dir, "params-none.rds", sep=SEP))
-if(!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+theta=params$theta
 
 params.speaker <- read_rds(paste(data_dir, "params-speaker.rds", sep=SEP))
 UTTERANCES <- read_rds(paste(params.speaker$target_dir, params.speaker$utts_fn, sep=SEP))
-THETA = 0.9
 
 # Figure 2 ----------------------------------------------------------------
 # for plotting densities sample more tables 
 params.tables = list(
   seed_tables=params$seed_tables, cns=params$cns, indep_sigma=params$indep_sigma,
-  n_tables=10000, n_ind_tables=10000,
+  n_best_cns=params$n_best_cns,
+  n_tables=10000, n_ind_tables=20000,
   tables_path=paste(params$target_dir, "tables-default-samples-for-plots.rds",
                     sep=.Platform$file.sep)
 )
-tables.plot = create_tables(params.tables)
-plot_tables_cns(params.tables$tables_path, plot_dir, w=5, h=5)
+tables.plot = create_tables(params.tables) %>% select(-cn, -ll) %>%
+  rename(cn=cn.orig)
+save_data(tables.plot, params.tables$tables_path)
+plot_tables_cns(params.tables$tables_path, params$plot_dir, w=5, h=5)
 
+# analyze_table_likelihoods(params)
 
 # Figure 3 ----------------------------------------------------------------
 # pragmatic/literal interpretations of conditional If A, C
@@ -34,7 +37,7 @@ plot_tables_cns(params.tables$tables_path, plot_dir, w=5, h=5)
 dat.none.voi <- read_rds(
   paste(params$target_dir, "results-none-prior-LL-PL-vois.rds",
         sep=.Platform$file.sep)) %>%
-  filter((key == "uncertain_both") & level!="prior") %>% 
+  filter((key == "uncertain_both") & level !="prior") %>% 
   mutate(ev=round(ev, 2))
 
 p <- dat.none.voi %>% 
@@ -51,7 +54,7 @@ p <- dat.none.voi %>%
   theme(legend.position = "none") +
   coord_flip()
 p
-ggsave(paste(plot_dir, "ignorance-inferences.png", sep=SEP), p,
+ggsave(paste(params$plot_dir, "ignorance-inferences.png", sep=SEP), p,
        width=13.5, height=4)
 
 
@@ -59,16 +62,22 @@ ggsave(paste(plot_dir, "ignorance-inferences.png", sep=SEP), p,
 # Figure 4 ----------------------------------------------------------------
 data.speaker <- read_rds(params.speaker$target) %>% select(-level, -bias) %>%
   select(-p_delta, -p_diff)
+bn_ids = read_rds(paste(params.speaker$target_dir, .Platform$file.sep, "sample-ids-",
+                        params.speaker$target_fn, sep="")) %>% 
+  group_by_all() %>% summarize(n_sampled=n(), .groups="drop_last")
+
 data.speaker.best <- data.speaker %>% group_by(bn_id) %>%
   mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
   unnest(c(u_best)) %>% select(-p_best)
 
+data.speaker.best = left_join(data.speaker.best, bn_ids, by=c("stimulus_id"))
+
 dat <- data.speaker.best %>%
   mutate(pa=`AC` + `A-C`, pc=`AC` + `-AC`,
-         certainA = pa >= THETA | pa <= 1-THETA,
-         certainC = pc >= THETA | pc <= 1-THETA,
-         uncA = pa > 1 - THETA & pa < THETA,
-         uncC = pc > 1-THETA & pc < THETA,
+         certainA = pa >= theta | pa <= 1-theta,
+         certainC = pc >= theta | pc <= 1-theta,
+         uncA = pa > 1 - theta & pa < theta,
+         uncC = pc > 1-theta & pc < theta,
          certain=certainA & certainC,
          uncertain=uncA & uncC, 
          both=!certain & !uncertain,
@@ -81,15 +90,16 @@ dat <- data.speaker.best %>%
   chunk_utterances()
 
 df <- dat %>% group_by(speaker_condition, cn, utterance) %>%
-  summarise(p=n(), .groups = "drop_last") %>% arrange(p) %>% 
+  summarise(p=sum(n_sampled), .groups = "drop_last") %>% arrange(p) %>% 
   mutate(N=sum(p), ratio=p/N) %>% rename(n=p, p=ratio) %>%
   mutate(speaker_condition = factor(speaker_condition,
                                     levels=c("certain", "uncertain", "both"))) %>%
   chunk_cns()
 
+df %>% filter(cn=="A,C independent" & speaker_condition=="uncertain")
 
-plot_speaker(df, "speaker_freq_best_un_certain_other.png", w=13.5, h=5, plot_dir,
-             "bottom", TRUE, "proportion", "best utterance")
+plot_speaker(df, "speaker_freq_best_un_certain_other.png", w=13.5, h=5,
+           params.speaker$plot_dir, "bottom", TRUE, "proportion", "best utterance")
 
 
 # Figure 5 ----------------------------------------------------------------
@@ -143,7 +153,7 @@ data_cp_plots <- function(params){
   
 data.cp.none = data_cp_plots(params)
 p <- plot_evs_cp(data.cp.none)
-ggsave(paste(plot_dir, "none-evs-cp.png", sep=SEP), p, width=16, height=8)
+ggsave(paste(params$plot_dir, "none-evs-cp.png", sep=SEP), p, width=16, height=8)
 
 
 # Figure 6 ----------------------------------------------------------------
@@ -159,6 +169,7 @@ plot_accept_conditions <- function(dat, fn){
   )
   condition_labels = as_labeller(c(`p_rooij`= "△*P", `p_delta`="△P", `p_diff`="P(C|A)-P(C)"))
   cn_labels = as_labeller(dat$cn %>% unique())
+  # x-axis binned into different non-linear intervals (groups)
   getGroup = function(val) {
     i<-1
     x <- x_labels[[1]]
@@ -171,9 +182,12 @@ plot_accept_conditions <- function(dat, fn){
   
   data <- dat %>% group_by(bn_id, level, condition) %>%
     mutate(group = getGroup(val)) %>%
-    group_by(level, condition, group, cn)
+    group_by(level, condition, group, cn) %>%
+    mutate(n_sampled=as.numeric(n_sampled)) %>% 
+    mutate(n_sampled=case_when(is.na(n_sampled) ~ 1,
+                               TRUE ~ n_sampled))
   data.sum <- data %>% 
-    summarise(count=n(), .groups="drop_last") %>%
+    summarise(count=sum(n_sampled), .groups="drop_last") %>%
     group_by(level, condition) %>%
     mutate(ratio = count/sum(count))
   
@@ -188,7 +202,7 @@ plot_accept_conditions <- function(dat, fn){
     theme_bw(base_size=25) +
     theme(legend.position="bottom", axis.text.x=element_text(angle=0, size=11))
   
-  ggsave(paste(plot_dir, fn, sep=SEP), p, width=18, height=10)
+  ggsave(paste(params$plot_dir, fn, sep=SEP), p, width=18, height=10)
   return(p)
 }
 
@@ -199,12 +213,16 @@ prior <-  read_rds(params.prior$target) %>%
 params.sp_literal <- read_rds(paste(data_dir, "params-speaker-literal.rds", sep=SEP))
 
 formatSpeaker <- function(params, cat) {
+  bn_ids = read_rds(paste(params$target_dir, .Platform$file.sep, "sample-ids-",
+                          params$target_fn, sep="")) %>% 
+    group_by_all() %>% summarize(n_sampled=n(), .groups="drop_last")
   speaker <- read_rds(file.path(params$target_dir, params$target_fn)) %>%
     select(-bias) %>% group_by(bn_id, cn) %>%
     mutate(utterance = paste("utt", utterance, sep="_")) %>% 
     pivot_wider(names_from = utterance, values_from=probs) %>%
     mutate(level = cat)
-  return(speaker)
+  sp = left_join(speaker, bn_ids, by=c("stimulus_id"))
+  return(sp)
 }
 
 # get data from implemented literal speaker (conditioned s.t. A > C is true)
@@ -222,6 +240,8 @@ speaker.pragmatic <- speaker.literal.best %>%
   select(-u_best, -p_best) %>%
   pivot_wider(names_from = "utterance", values_from = "probs") 
 
+speakers = bind_rows(speaker.literal, speaker.pragmatic)
+
 df <- bind_rows(prior, speaker.literal, speaker.pragmatic) %>%
   group_by(bn_id, cn, level) %>%
   pivot_longer(cols=c(p_delta, p_rooij, p_diff), names_to="condition", values_to = "val") %>% 
@@ -237,40 +257,56 @@ df <- bind_rows(prior, speaker.literal, speaker.pragmatic) %>%
 
 plot_accept_conditions(df %>% filter(condition != "p_diff"), "accept-conditions.png")
 
+# -------------- additional checks on tables of pragmatic speaker condition
+speaker.pragmatic.long = speaker.pragmatic %>% 
+   pivot_longer(cols=starts_with("utt_"), names_to="utterance", values_to="probs")
+ 
+prag.ind= speaker.pragmatic.long %>% filter(cn=="A || C" & probs>0) 
+# analyze prior given tables where no literal no conjunction is true
+prior = readRDS(params$target) %>% filter(level=="prior") %>%
+  pivot_wider(names_from="cell", values_from="val")
 
+prior.unc = prior %>%
+  mutate(conj=AC>theta | `A-C`>theta | `-AC`>theta | `-A-C`>theta,
+         lit=(AC+`A-C` > theta) | (AC+`-AC`>theta) |
+           (AC+`A-C` < 1-theta) | (AC+`-AC`<1-theta)) %>%
+  filter(!conj &!lit) %>% ungroup() %>%
+  filter(AC/(AC+`A-C`) > theta)
+
+ids = prior.unc %>% filter(cn=="A || C") %>% pull(bn.id)
+ratio = nrow(prag.ind) / nrow(prag.ind %>% filter(stimulus_id %in% ids))
+print(paste(ratio, 'cant say conjunction or literal'))
+
+speaker.pragmatic %>% filter(p_rooij>0.9) %>% pull(n_sampled) %>% sum() /
+  speaker.pragmatic %>% pull(n_sampled) %>% sum()
+speaker.literal %>% filter(p_rooij<0) %>% pull(n_sampled) %>% sum() /
+  speaker.literal %>% pull(n_sampled) %>% sum()
+
+prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / prior  %>% nrow()
+prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / prior  %>% nrow()
 
 # Figure 7 ----------------------------------------------------------------
-params.speaker.p_rooij = read_rds(
-  paste(data_dir, "params-speaker-p_rooij-large.rds", sep=SEP)
-)
-speaker.p_rooij <- read_rds(params.speaker.p_rooij$target) %>%
-  select(-level, -bias, -p_delta, -p_diff)
 
-speaker.p_rooij.best <- speaker.p_rooij %>% group_by(bn_id) %>%
+# speaker p_rooij filtered from literal speaker condition
+speaker.p_rooij.best.from_lit = speaker.literal %>% filter(p_rooij>0.9) %>% 
+  group_by(stimulus_id, cn) %>%
+  pivot_longer(cols=starts_with("utt_"), names_prefix="utt_", names_to="utterance", values_to="probs") %>%
   mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
   unnest(u_best) %>% select(-p_best)
 
 # frequency utterance type is the speaker's best utterance
 # GIVEN A > C is NOT the speaker's best utterance
-df <- speaker.p_rooij.best %>%
-  filter(utterance == u_best) %>% 
-  select(-u_best) %>%
-  distinct(bn_id, .keep_all = TRUE) %>%
-  filter(utterance != "A > C" & utterance != "C > A") %>%
-  chunk_utterances()
+df <- speaker.p_rooij.best.from_lit %>%
+  filter(utterance == u_best) %>% select(-u_best) %>%
+  filter(utterance != "A > C") %>%
+  chunk_utterances(c("-C > -A", "-A > -C", "C > A"))
 
 df.sum <- df %>% group_by(utterance) %>%
-  summarise(p=n(), .groups = "drop_last") %>% arrange(p) %>% 
+  summarise(p=sum(n_sampled), .groups = "drop_last") %>% arrange(p) %>% 
   mutate(N=sum(p), p=p/N)
 
-plot_speaker(df.sum, "speaker_prooij_large_freq_best_not_ac.png", w=13.5, h=4,
-             plot_dir, "bottom", FALSE, "proportion", "best utterance")
-
-
-
-
-
-
-
+plot_speaker(df.sum, "speaker_prooij_large_freq_best_not_ac.from_lit.png", w=13.5, h=4,
+             params.speaker.p_rooij$plot_dir, "bottom", FALSE,
+             "proportion", "best utterance")
 
 

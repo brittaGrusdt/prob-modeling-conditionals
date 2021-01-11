@@ -7,15 +7,13 @@ globalStore.dep_cns = _.without(data["cns"], "A || C");
 globalStore.utterances = data["utterances"]
 
 var tables_list = data["tables"]
-globalStore.Tables = map(function(obj){
+globalStore.bns = map(function(obj){
   var p = Categorical({"vs": obj["vs"], "ps": obj["ps"]})
   return {
-    id: obj.stimulus_id, Table: p,
-    logL_if_ac: obj.logL_if_ac, logL_if_ca: obj.logL_if_ca,
-    logL_if_anc: obj.logL_if_anc, logL_if_cna: obj.logL_if_cna,
-    logL_ind: obj.logL_ind
+    bn_id: obj.bn_id, Table: p, cn: obj.cn, ll: obj.ll
   }
 }, tables_list)
+
 // model parameters
 globalStore.alpha = data["alpha"][0]
 globalStore.cost_conditional = data["cost_conditional"][0]
@@ -49,7 +47,8 @@ var run = function(level){
          level == "LL" ? literal_listener(UTT, BIAS) : listener(UTT, BIAS)
 }
 
-globalStore.state_prior = run("prior")
+var prior = run("prior")
+globalStore.state_prior = prior
 var all_bns = map(function(obj){obj["bn"]}, (globalStore.state_prior).support())
 if(verbose){display('# states: ' + all_bns.length)}
 // display('single bn: ')
@@ -82,22 +81,24 @@ if(LEVEL_MAX == "speaker"){
   // draw n_samples from prior or take all bns from support of prior
   var bns = n_samples != 0 ? repeat(n_samples, function(){sample(prior_conditioned)})
                            : all_bns;
-  // display('nb bns considered for speaker:' + bns.length)
-  // var bns_uniq = []
-  // var bn_ids = reduce(function(bn, acc){
-  //   var idx = acc.indexOf(bn.id);
-  //   if(idx == -1){
-  //     bns_uniq.push(bn)
-  //     acc.concat([bn.id])
-  //   } else {
-  //       acc.concat([])
-  //   }
-  // }, [], bns);
+  var all_ids =  _.map(bns, 'id')
+  display('nb bns considered for speaker:' + bns.length)
+  var bns_uniq = []
+  var bn_ids = reduce(function(bn, acc){
+    var idx = acc.indexOf(bn["id"]);
+    if(idx == -1){
+      bns_uniq.push(bn)
+      acc.concat([bn["id"]])
+    } else {
+        acc.concat([])
+    }
+  }, [], bns);
 
-  // display('# unique bns that are input to speaker(where condition, if any, holds): ' + bns_uniq.length)
-  // var distributions = run_speaker(bns_uniq)
-  var distribution = run_speaker(bns)
-  distributions
+  display('# unique bns that are input to speaker(where condition, if any, holds): ' + bns_uniq.length)
+  var distributions = run_speaker(bns_uniq)
+  var obj= {distributions, all_ids}
+  obj
+
 } else if(LEVEL_MAX == "ll_all_utts"){
   var distributions = {"ll": map(wrap_ll, globalStore.utterances)}
   distributions

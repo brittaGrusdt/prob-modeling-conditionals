@@ -1,10 +1,4 @@
-// var data = {
-//   "verbose": [true],
-//   "vars": ["A", "C"],
-//   "bias": ["none"]
-//   "tables": //add example here
-// }
-globalStore.thresholds = {t: 0.899, f: 0.0499, theta: data["theta"][0], theta_likely : 0.499}
+globalStore.thresholds = {theta: data["theta"][0], theta_likely : 0.5}
 var verbose = data["verbose"][0]
 var variables = data["vars"]
 var bias = data["bias"][0]
@@ -12,14 +6,11 @@ globalStore.bias = bias
 var tables_list = data["tables"]
 globalStore.cns = data["cns"]
 
-globalStore.Tables = map(function(obj){
+globalStore.bns = map(function(obj){
   var p = Categorical({"vs": obj["vs"], "ps": obj["ps"]})
   // display(obj["likelihood_if1"])
   return {
-    id: obj.stimulus_id, Table: p,
-    logL_if_ac: obj.logL_if_ac, logL_if_ca: obj.logL_if_ca,
-    logL_if_anc: obj.logL_if_anc, logL_if_cna: obj.logL_if_cna,
-    logL_ind: obj.logL_ind
+    id: obj["bn_id"], Table: p, ll: obj.ll, cn: obj.cn
   }
 }, tables_list)
 
@@ -28,7 +19,7 @@ globalStore.indep_sigma = data["indep_sigma"][0]
 if(verbose){
   display("bias: " + bias)
   display("theta: " + globalStore.thresholds.theta)
-  display("# tables: " + globalStore.Tables.length)
+  display("# tables: " + globalStore.bns.length)
   display("vars: " + variables)
 }
 

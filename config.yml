@@ -12,19 +12,22 @@ default:
   #seed_webppl: !expr as.numeric(Sys.time())
   seed_webppl: 1602531065
   add_accept_conditions: true
-  indep_sigma: 0.001 # previously: 0.001
+  indep_sigma: 0.005
+  n_best_cns: 3
+
+targets_default:
+  target_dir: "./data/default-model/paper-config"
 
 ## 1. bias configurations ##
 bias_none:
-  target_dir: "./data/default-model"
   target_fn: "results-none.rds"
   target_params: "params-none.rds"
   utts_fn: "utterances-none.rds"
   vars: !expr c("A", "C")
   cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
   bias: "none"
-  n_tables: 2500
-  n_ind_tables: 10000 # 4 times more than for each of the 4 dep. nets
+  n_tables: 2000
+  n_ind_tables: 3000
   tables_fn: "tables-default.rds"
 
 log_likelihood:
@@ -85,7 +88,6 @@ skiing:
 speaker:
   level_max: "speaker"
   utt: ""
-  target_dir: "./data/default-model"
   target_fn: "results-speaker.rds"
   target_params: "params-speaker.rds"
   n_samples: 20000 # bns sampled from prior
@@ -97,7 +99,6 @@ speaker:
 speaker_literal:
   level_max: "speaker"
   utt: "A > C" #condition s.t. only states where utt is true are considered
-  target_dir: "./data/default-model"
   target_fn: "results-speaker-literal.rds"
   target_params: "params-speaker-literal.rds"
   n_samples: 20000 # bns sampled from prior
@@ -105,7 +106,6 @@ speaker_literal:
 speaker_p_rooij:
   level_max: "speaker"
   utt: "p_rooij"
-  target_dir: "./data/default-model"
   target_fn: "results-speaker-p_rooij-large.rds"
   target_params: "params-speaker-p_rooij-large.rds"
   n_samples: 20000 # bns sampled from prior

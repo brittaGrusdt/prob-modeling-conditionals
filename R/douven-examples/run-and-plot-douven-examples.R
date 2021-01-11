@@ -86,7 +86,7 @@ plot_douven_cases <- function(data){
 }
 
 p <- douven.data %>% plot_douven_cases()
-ggsave(here("figs", "douven-cases.png"), p, width=15, height=6)
+ggsave(here("data", "douven-examples", "douven-cases.png"), p, width=15, height=6)
 
   
 

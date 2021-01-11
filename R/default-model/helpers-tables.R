@@ -37,7 +37,8 @@ create_dependent_tables <- function(params, cns){
     tables <- probs %>% dplyr::select(-cond1, -cond2, -marginal) %>%
       rowid_to_column("id")
     tables_long <- tables %>%
-      gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val")
+      gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val") %>%
+      filter(val != 0)
     tables_wide <- tables_long %>% group_by(id) %>%
       summarise(ps = list(val), .groups = 'drop') %>% add_column(cn=(!! cn)) %>%
       mutate(vs=list(c("AC", "A-C", "-AC", "-A-C"))) %>% dplyr::select(-id)
@@ -53,26 +54,24 @@ create_independent_tables <- function(params){
   tables <- tibble(pc=runif(params$n_ind_tables), pa=runif(params$n_ind_tables)) %>%
     rowid_to_column("id") %>%
     mutate(upper_bound = pmin(pa, pc),
-           lower_bound = ifelse(1-(pa+pc) <= 0, abs(1-(pa+pc)), 0),
+           lower_bound = ifelse(1-(pa+pc) < 0, abs(1-(pa+pc)), 0),
            #noisy samples
            `AC`= rtruncnorm(1, a=lower_bound, b=upper_bound, mean=pa*pc, sd=params$indep_sigma), 
-           `-AC`=pc-`AC`,
-           `A-C`=pa-`AC`,
-           s=`AC` + `-AC` + `A-C`,
-           `-A-C`= 1 - s) %>%
+           `-AC`=pc-`AC`, `A-C`=pa-`AC`, s=`AC` + `-AC` + `A-C`, `-A-C`= 1 - s) %>%
     select(-upper_bound, -lower_bound, -pa, -pc, -s)
   tables.mat = tables  %>% select(-id) %>% as.matrix() 
   
-  tables = prop.table(tables.mat + EPSILON, 1) %>% as_tibble() %>%
+  tables = prop.table(tables.mat, 1) %>% as_tibble() %>%
     mutate(n=AC + `A-C` + `-AC` + `-A-C`) %>%
     add_column(id=tables$id)
            
   tables_long <- tables %>%
-    gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val")
+    gather(`AC`, `A-C`, `-AC`, `-A-C`, key="cell", val="val") %>%
+    filter(val != 0)
   tables_wide <- tables_long %>% group_by(id) %>%
     summarise(ps = list(val), .groups = 'drop') %>% add_column(cn="A || C") %>% 
     mutate(vs=list(c("AC", "A-C", "-AC", "-A-C"))) %>%
-    dplyr::select(-id)
+    dplyr::select(-id) 
   return(tables_wide)
 }
 
@@ -90,10 +89,24 @@ create_tables <- function(params){
     mutate(vs=list(c("AC", "A-C", "-AC", "-A-C")),
            ps=list(c(`AC`, `A-C`, `-AC`, `-A-C`))) %>%
     select(-`AC`, -`A-C`, -`-AC`, -`-A-C`) %>%
-    mutate(stimulus_id=case_when(
+    mutate(bn_id=case_when(
       cn=="A || C" ~ paste(id, "independent", sep="_"),
       TRUE ~ paste(id, str_replace_all(cn, " ", ""), sep="_"))
-      );
+      ) %>%
+    rename(cn.orig=cn)
+  
+  tables.ll = tables %>% pivot_longer(cols=starts_with("logL_"), names_to="ll_cn", "ll")
+  for(i in seq(1, params$cns %>% length() - params$n_best_cns)){
+    tables.ll = tables.ll %>% mutate(worst_ll=min(value)) %>%
+      filter(value!=worst_ll) %>% select(-worst_ll)
+  }
+  tables = tables.ll  %>%
+    mutate(cn=case_when(ll_cn=="logL_ind" ~ "A || C",
+                        ll_cn=="logL_if_ac" ~ "A implies C",
+                        ll_cn=="logL_if_ca" ~ "C implies A",
+                        ll_cn=="logL_if_anc" ~ "A implies -C",
+                        ll_cn=="logL_if_cna" ~ "C implies -A")) %>%
+    rename(ll=value) %>% select(-ll_cn, -ind.lower, -ind.upper) 
   
   tables %>% save_data(params$tables_path)
   return(tables)
@@ -140,28 +153,25 @@ plot_tables <- function(data){
 
 # plot densities of generated tables for different causal nets
 plot_tables_cns <- function(tables_path, plot_dir, w, h){
-  tables.wide <- readRDS(tables_path) %>% unnest_tables() %>%
-    rename(bn_id=rowid) %>% group_by(bn_id, cn) %>% 
-    pivot_wider(names_from = cell, values_from = val) %>% ungroup()
+  tables.wide <- readRDS(tables_path) %>% unnest_tables() %>% ungroup() %>%
+    select(-id, -rowid) %>% group_by(bn_id) %>% 
+    pivot_wider(names_from = cell, values_from = val)
   tables.long <- tables.wide %>% 
-    mutate(`-A-C` = case_when(is.na(`-A-C`) ~ rowSums(select(., starts_with("-A-C_"))),
-                              TRUE ~ `-A-C`),
-           `-AC` = case_when(is.na(`-AC`) ~ rowSums(select(., starts_with("-AC_"))),
-                             TRUE ~ `-AC`), 
-           `A-C` = case_when(is.na(`A-C`) ~ rowSums(select(., starts_with("A-C_"))),
-                             TRUE ~ `A-C`),
-           `AC` = case_when(is.na(`AC`) ~ rowSums(select(., starts_with("AC_"))),
-                            TRUE ~ `AC`)) %>% 
-    group_by(bn_id, cn) %>%
+    # mutate(`-A-C` = case_when(is.na(`-A-C`) ~ rowSums(select(., starts_with("-A-C_"))),
+    #                           TRUE ~ `-A-C`),
+    #        `-AC` = case_when(is.na(`-AC`) ~ rowSums(select(., starts_with("-AC_"))),
+    #                          TRUE ~ `-AC`), 
+    #        `A-C` = case_when(is.na(`A-C`) ~ rowSums(select(., starts_with("A-C_"))),
+    #                          TRUE ~ `A-C`),
+    #        `AC` = case_when(is.na(`AC`) ~ rowSums(select(., starts_with("AC_"))),
+    #                         TRUE ~ `AC`)) %>% 
     pivot_longer(cols = c(AC, `A-C`, `-AC`, `-A-C`), names_to = "cell", values_to = "val") %>% 
-    ungroup() %>% 
+    group_by(bn_id, cn) %>% 
     mutate(cell=factor(cell, levels=c("AC", "A-C", "-AC", "-A-C")),
            cn=case_when(cn=="A || C" ~ "A,C independent",
                         cn=="A implies -C" ~ "A implies ¬C",
                         TRUE ~ cn),
-           cn=as.factor(cn)) %>% 
-    group_by(bn_id, cn)
-  
+           cn=as.factor(cn))
   all_plots = list()
   cns <- list(c("A,C independent"), c("A implies ¬C"), c("A implies C"))
   cns.short <- c("indep", "anc", "ac")
@@ -185,5 +195,141 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
     print(paste('saved to', save_to))
   }
   return(all_plots)
+}
+
+# Analyze generated Tables ------------------------------------------------
+analyze_tables <- function(params){
+  theta = params$theta
+  prior = readRDS(params$target) %>% filter(level=="prior") %>%
+    pivot_wider(names_from="cell", values_from="val") %>% ungroup() %>% 
+    select(prob, bn.id) %>% rename(bn_id=bn.id)
+  tables <- read_rds(params$tables_path) %>% ungroup() %>% 
+      select(bn_id, cn.orig, cn, vs, ps) %>% group_by(bn_id, cn) %>% unnest(c(ps, vs))
+  tables = left_join(tables, prior, by=c("bn_id"))
+  tables.wide <-  tables %>% pivot_wider(names_from = vs, values_from = ps)  
+  
+  results = tibble()
+  n.wide = nrow(tables.wide)
+  n.long = nrow(tables)
+  # conjunctions
+  df.conj <- tables %>% mutate(conj=case_when(ps >= theta ~ TRUE,
+                                              TRUE ~ FALSE))
+  count_conj=function(df.conj, cell){
+    df = df.conj %>% filter(conj & vs == (!! cell)) 
+    prob = sum(df$prob)
+    n = df %>% nrow()
+    ratio = round(n / nrow(df.conj), 5)
+    return(tibble(n=n, ratio=ratio, key=cell))
+  }
+  
+  conj = pmap_dfr(tibble(cell=c("AC", "A-C", "-AC", "-A-C")), function(cell){
+    return(count_conj(df.conj, cell))
+  })
+  
+  conditionals <- tables.wide %>%
+    add_column(pca=compute_cond_prob(tables.wide, "P(C|A)") %>% pull(p) > theta,
+               pac=compute_cond_prob(tables.wide, "P(A|C)") %>% pull(p) > theta,
+               pcna = compute_cond_prob(tables.wide, "P(C|-A)") %>% pull(p) > theta,
+               panc = compute_cond_prob(tables.wide, "P(A|-C)") %>% pull(p) > theta
+    )
+  ifs = tribble(~n, ~key,
+          conditionals %>% filter(pca) %>% nrow(), "if_ac",
+          conditionals %>% filter(pac) %>% nrow(), "if_ca",
+          conditionals %>% filter(pcna) %>% nrow(), "if_nac",
+          conditionals %>% filter(panc) %>% nrow(), "if_ncna") %>% 
+    mutate(ratio = round(n/n.wide, 2))
+
+  literals <- tables.wide %>%
+    mutate(a=`AC` + `A-C` > 0.5,
+           c=`AC` + `-AC` > 0.5,
+           na=`-AC` + `-A-C` > 0.5,
+           nc=`A-C` + `-A-C` > 0.5)
+  n.likely_a = literals %>% filter(a) %>% nrow
+  n.likely_c = literals %>% filter(c) %>% nrow
+  n.likely_na = literals %>% filter(na) %>% nrow
+  n.likely_nc = literals %>% filter(nc) %>% nrow
+  
+  likely = tribble(~n, ~key,
+                    n.likely_a, "likely_a",
+                    n.likely_c, "likely_c",
+                    n.likely_na, "likely_na",
+                    n.likely_nc, "likely_nc") %>% 
+    mutate(ratio=round(n/n.wide, 2))
+  
+  literals <- tables.wide %>%
+    mutate(a=`AC` + `A-C` > theta,
+           c=`AC` + `-AC` > theta,
+           na=`-AC` + `-A-C` > theta,
+           nc=`A-C` + `-A-C` > theta)
+  n.a = literals %>% filter(a) %>% nrow
+  n.c = literals %>% filter(c) %>% nrow
+  n.na = literals %>% filter(na) %>% nrow
+  n.nc = literals %>% filter(nc) %>% nrow
+
+  lits = tribble(~n, ~key,
+                    n.a, "A",
+                    n.c, "C",
+                    n.na, "-A",
+                    n.nc, "-C") %>% 
+    mutate(ratio=round(n/n.wide, 2))
+  return(bind_rows(conj, lits, likely, ifs) %>% arrange(ratio))
+}
+
+analyze_table_likelihoods = function(params, w=5, h=5){
+  tables <- read_rds(params$tables_path) %>% unnest(c(ps, vs)) %>% group_by(id)
+  tables.wide <-  tables %>% pivot_wider(names_from = "vs", values_from = "ps") %>%
+    mutate(cn.orig=case_when(cn.orig=="A || C" ~ "A,C independent",
+                             cn.orig=="A implies C" ~ "A implies C",
+                             cn.orig=="A implies -C" ~ "A implies ¬C",
+                             cn.orig=="C implies A" ~ "C implies A",
+                             cn.orig=="C implies -A" ~ "C implies ¬A"))
+  tbls.best.cns = tables.wide %>% mutate(best_cn= ll==max(ll)) %>%
+    filter(best_cn) %>% dplyr::select(-best_cn)
+  tables.long = tbls.best.cns %>%
+    pivot_longer(c(AC, `A-C`, `-AC`, `-A-C`), names_to="cell", values_to="val") %>%
+    mutate(cell=factor(cell, levels=c("AC", "A-C", "-AC", "-A-C")),
+           cn.orig=as.factor(cn.orig)) %>% 
+    group_by(id, cn.orig)
+  
+  all_plots = list()
+  cns <- list(c("A,C independent"), c("A implies ¬C"), c("A implies C"))
+  cns.short <- c("indep", "anc", "ac")
+  for(i in seq(1,3)) {
+    p <- tables.long %>% filter(cn.orig %in% cns[[i]]) %>%
+      ggplot(aes(x=val,  fill = cn.orig)) +
+      geom_density() +
+      facet_wrap(~cell, ncol = 2, scales = "free",
+                 labeller = labeller(cell = c(`AC` = "P(A,C)", `A-C` = "P(A,¬C)",
+                                              `-AC`= "P(¬A,C)", `-A-C` = "P(¬A,¬C)"))
+      ) +
+      scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) +
+      labs(x="probability", y="density") +
+      theme_classic(base_size = 20) +
+      theme(legend.position = "none") +
+      ggtitle(cns[[i]])
+    all_plots[[i]] = p
+    
+    save_to = paste(params$plot_dir, paste("tables-", cns.short[[i]], ".png", sep=""), sep=SEP)
+    ggsave(save_to, p, width=w, height=h)
+    print(paste('saved to', save_to))
+  }
+}
+
+plot_sigma_ind_tables = function(){
+  x=seq(0,0.3, length=1000)
+  x_labels <-seq(0, 0.3, by=0.05)
+  x_breaks <- seq(0, 0.3, by=0.05)
+  sigmas = c(0.001, 0.005, 0.01, 0.1)
+  for(sigma in sigmas){
+    y=dtruncnorm(x, a=0, b=0.3, mean=0.12, sd=sigma)
+    p = ggplot() + 
+      geom_point(aes(x=x, y=y), size=0.5) +
+      scale_x_continuous(breaks=x_breaks, labels=x_labels) +
+      theme_classic() +
+      theme(axis.text.x=element_text(angle=30, vjust=-.01)) +
+      labs(x="") 
+    
+    ggsave(here("figs", paste("truncnorm_ind_sigma_", sigma, ".png", sep="")), p)
+  }
 }
 
