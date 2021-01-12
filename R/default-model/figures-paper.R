@@ -53,10 +53,8 @@ p <- dat.none.voi %>%
   theme_classic(base_size=25) +
   theme(legend.position = "none") +
   coord_flip()
-p
 ggsave(paste(params$plot_dir, "ignorance-inferences.png", sep=SEP), p,
        width=13.5, height=4)
-
 
 
 # Figure 4 ----------------------------------------------------------------
@@ -98,8 +96,9 @@ df <- dat %>% group_by(speaker_condition, cn, utterance) %>%
 
 df %>% filter(cn=="A,C independent" & speaker_condition=="uncertain")
 
-plot_speaker(df, "speaker_freq_best_un_certain_other.png", w=13.5, h=5,
-           params.speaker$plot_dir, "bottom", TRUE, "proportion", "best utterance")
+p = plot_speaker(df, "bottom", facets=TRUE, xlab="proportion", ylab="best utterance")
+ggsave(paste(params.speaker$plot_dir, "speaker_freq_best_un_certain_other.png",
+             sep=SEP), p, width=13.5, height=4)
 
 
 # Figure 5 ----------------------------------------------------------------
@@ -285,6 +284,19 @@ speaker.literal %>% filter(p_rooij<0) %>% pull(n_sampled) %>% sum() /
 prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / prior  %>% nrow()
 prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / prior  %>% nrow()
 
+
+# Check almost true states Appendix
+df= speaker.pragmatic %>% filter(cn=="A || C") %>% select(-starts_with("utt_")) %>% 
+  ungroup()
+df.lit = df %>% group_by(bn_id) %>% 
+  mutate(pa=`AC`+`A-C`, pc=`AC`+`-AC`, pna=`-AC`+`-A-C`, pnc=`A-C`+`-A-C`) %>%
+  select(bn_id, pa, pc, pna, pnc) %>% 
+  pivot_longer(cols=c(-bn_id), names_to="p", values_to="val") %>%
+  arrange(desc(val)) %>% 
+  distinct_at(vars(c("bn_id")), .keep_all = TRUE)
+df.almost_true = df.lit %>% filter(val>=0.85) 
+
+
 # Figure 7 ----------------------------------------------------------------
 
 # speaker p_rooij filtered from literal speaker condition
@@ -301,12 +313,14 @@ df <- speaker.p_rooij.best.from_lit %>%
   filter(utterance != "A > C") %>%
   chunk_utterances(c("-C > -A", "-A > -C", "C > A"))
 
-df.sum <- df %>% group_by(utterance) %>%
+df.sum <- df %>% group_by(utterance, cn) %>%
   summarise(p=sum(n_sampled), .groups = "drop_last") %>% arrange(p) %>% 
   mutate(N=sum(p), p=p/N)
 
-plot_speaker(df.sum, "speaker_prooij_large_freq_best_not_ac.from_lit.png", w=13.5, h=4,
-             params.speaker.p_rooij$plot_dir, "bottom", FALSE,
-             "proportion", "best utterance")
+p = plot_speaker(df.sum, "bottom", facets=FALSE, xlab="proportion",
+                 ylab="best utterance")
 
+ggsave(paste(params.speaker$plot_dir,
+             "literal-speaker_prooij_large_freq_best_not_ac.png",
+             sep=SEP), p, width=13.5, height=4.5)
 

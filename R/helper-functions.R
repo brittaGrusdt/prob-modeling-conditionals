@@ -269,8 +269,7 @@ plot_evs <- function(data){
   return(p)
 }
 
-plot_speaker <- function(data, fn, w, h, plot_dir, legend_pos="none",
-                         facets=TRUE, xlab="", ylab="") {
+plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="") {
   df <- data %>% mutate(p=round(as.numeric(p), 2))
   if(xlab==""){xlab = TeX("$\\frac{1}{|S|} \\cdot \\sum_{s \\in S} P_S(u|s)$")}
   if(ylab==""){ylab = "utterance"}
@@ -285,13 +284,12 @@ plot_speaker <- function(data, fn, w, h, plot_dir, legend_pos="none",
     p <-  df %>% ggplot(aes(y=utterance, x=p))
   }
   p <- p +
-    geom_bar(stat="identity", position=position_dodge(preserve = "single"))  +
+    geom_bar(stat="identity", position=position_stack()) +
+             # position=position_dodge(preserve = "single"))  +
     labs(x=xlab, y=ylab) + theme_bw(base_size=25)
   if(facets) {p <- p + facet_wrap(~speaker_condition)
   }
   p <- p + theme(axis.text.y=element_text(size=15), legend.position=legend_pos)
-  
-  ggsave(paste(plot_dir, fn, sep=SEP), p, width=w, height=h)
   return(p)
 }
 
