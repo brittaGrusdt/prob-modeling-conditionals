@@ -105,7 +105,7 @@ ggsave(paste(params.speaker$plot_dir, "speaker_freq_best_un_certain_other.png",
              sep=SEP), p)
 
 # Figure 5 ----------------------------------------------------------------
-plot_evs_cp <- function(data){
+plot_evs_cp <- function(data, facets){
   df = data %>%
     mutate(kind=case_when(val == "p" ~ "CP-propositions",
                           val_type == "A,C indep." ~ "cn.ind",
@@ -161,7 +161,8 @@ data_cp_plots <- function(params){
 }
   
 data.cp.none = data_cp_plots(params)
-p <- plot_evs_cp(data.cp.none) 
+facets = list("cns"="causal nets", "p"="CP-probabilities")
+p <- plot_evs_cp(data.cp.none, facets) 
   
 ggsave(paste(params$plot_dir, "none-evs-cp.png", sep=SEP), p, width=6.7, height=3)
 
