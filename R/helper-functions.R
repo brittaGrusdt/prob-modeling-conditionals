@@ -284,12 +284,11 @@ plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="")
     p <-  df %>% ggplot(aes(y=utterance, x=p))
   }
   p <- p +
-    geom_bar(stat="identity", position=position_stack()) +
-             # position=position_dodge(preserve = "single"))  +
-    labs(x=xlab, y=ylab) + theme_bw(base_size=25)
+    geom_bar(stat="identity", position=position_dodge(preserve = "single"))  +
+    labs(x=xlab, y=ylab) + theme_bw()
   if(facets) {p <- p + facet_wrap(~speaker_condition)
   }
-  p <- p + theme(axis.text.y=element_text(size=15), legend.position=legend_pos)
+  p <- p + theme(axis.text.y=element_text(), legend.position=legend_pos)
   return(p)
 }
 

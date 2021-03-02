@@ -9,6 +9,8 @@ source("R/default-model/helpers-tables.R")
 
 SEP = .Platform$file.sep
 data_dir = here("data", "default-model", "paper-config")
+plot_dir = paste(data_dir, "figs", sep=SEP)
+if(!dir.exists(plot_dir)) dir.create(plot_dir)
 params <- read_rds(paste(data_dir, "params-none.rds", sep=SEP))
 theta=params$theta
 
@@ -50,7 +52,7 @@ p <- dat.none.voi %>%
   ) + 
   labs(y= TeX("$\\sum_{s\\in Uncertain_s(A) \\bigcap Uncertain_s(C) \\}
             Pr(s|u=A\\rightarrow C)$"), x="") +
-  theme_classic(base_size=25) +
+  theme_classic() +
   theme(legend.position = "none") +
   coord_flip()
 ggsave(paste(params$plot_dir, "ignorance-inferences.png", sep=SEP), p,
@@ -79,42 +81,50 @@ dat <- data.speaker.best %>%
          certain=certainA & certainC,
          uncertain=uncA & uncC, 
          both=!certain & !uncertain,
-         speaker_condition = case_when(certain ~ "certain",
-                                       uncertain ~ "uncertain",
-                                       both ~ "both")) %>% 
+         speaker_condition = case_when(certain ~ "A,C certain",
+                                       uncertain ~ "A,C uncertain",
+                                       both ~ "A (C) certain, C (A) uncertain")) %>% 
   select(-uncA, -uncC, -certainA, -certainC, -certain, -uncertain) %>%
   select(-utterance) %>%
   rename(utterance = u_best) %>% distinct(bn_id, .keep_all = TRUE) %>%
   chunk_utterances()
 
-df <- dat %>% group_by(speaker_condition, cn, utterance) %>%
-  summarise(p=sum(n_sampled), .groups = "drop_last") %>% arrange(p) %>% 
+df <- dat %>%
+  group_by(speaker_condition, cn, utterance) %>%
+  mutate(p_ifac=(AC/pa) >= 0.9) %>% 
+  summarise(p=sum(n_sampled), n.ifac=sum(p_ifac*n_sampled), .groups = "drop_last") %>%
+  arrange(p) %>% 
   mutate(N=sum(p), ratio=p/N) %>% rename(n=p, p=ratio) %>%
   mutate(speaker_condition = factor(speaker_condition,
-                                    levels=c("certain", "uncertain", "both"))) %>%
+                                    levels=c("A,C certain", "A,C uncertain",
+                                             "A (C) certain, C (A) uncertain"))) %>%
   chunk_cns()
-
-df %>% filter(cn=="A,C independent" & speaker_condition=="uncertain")
 
 p = plot_speaker(df, "bottom", facets=TRUE, xlab="proportion", ylab="best utterance")
 ggsave(paste(params.speaker$plot_dir, "speaker_freq_best_un_certain_other.png",
-             sep=SEP), p, width=13.5, height=4)
-
+             sep=SEP), p)
 
 # Figure 5 ----------------------------------------------------------------
 plot_evs_cp <- function(data){
-  lim = ifelse(max(data$ev) < 1-0.1, max(data$ev)+0.1, 1)
-  p <- data %>% ggplot(aes(y=val_type, x=ev, fill=level)) + 
-    geom_bar(position=position_dodge2(preserve = "single"), stat="identity") +
-    scale_x_continuous(limits=c(0, lim)) +
-    scale_y_discrete(name=paste(strwrap("causal nets / conditional probs", width=20),
-                                collapse="\n")) +
-    scale_fill_discrete(name="Interpretation Level",
-                        breaks=c("prior", "LL", "PL"),
-                        labels=c("A priori", "Literal", "Pragmatic")) +
-    labs(x="Degree of belief") +
-    theme_bw(base_size=25) +
-    theme(legend.position = c(.95, .95), legend.justification=c("right", "top"))
+  df = data %>%
+    mutate(kind=case_when(val == "p" ~ "CP-propositions",
+                          val_type == "A,C indep." ~ "cn.ind",
+                          val_type %in% c("A -> C", "C -> A") ~ "cns.dep.pos", 
+                          val_type %in% c("A -> ¬C", "C -> ¬A") ~ "cns.dep.neg"),
+           val=recode(val, "cns"="causal nets", "p"="CP-probabilities"))
+  
+  p <- df %>% ggplot(aes(y=level, x=ev, fill=val_type)) + 
+    geom_bar(position=position_dodge(), stat="identity") +
+    # scale_y_discrete(name=paste(strwrap("values", width=20),
+    #                             collapse="\n")) +
+    scale_fill_discrete(name="value") +
+    #                     breaks=c("prior", "LL", "PL"),
+    #                     labels=c("A priori", "Literal", "Pragmatic")) +
+    labs(x="Degree of belief", y="Interpretation level") +
+    theme_bw() +
+    theme(legend.position="top") +
+    facet_wrap(~val, labeller=as_labeller(facets))
+    # theme(legend.position = c(.95, .95), legend.justification=c("right", "top"))
   return(p)
 }
 
@@ -151,8 +161,9 @@ data_cp_plots <- function(params){
 }
   
 data.cp.none = data_cp_plots(params)
-p <- plot_evs_cp(data.cp.none)
-ggsave(paste(params$plot_dir, "none-evs-cp.png", sep=SEP), p, width=16, height=8)
+p <- plot_evs_cp(data.cp.none) 
+  
+ggsave(paste(params$plot_dir, "none-evs-cp.png", sep=SEP), p, width=6.7, height=3)
 
 
 # Figure 6 ----------------------------------------------------------------
@@ -198,7 +209,7 @@ plot_accept_conditions <- function(dat, fn){
     scale_x_continuous(breaks=x_breaks, labels=x_labels) +
     labs(x=paste(strwrap("accept/assert condition value intervals", width=25), collapse="\n"),
          y="ratio", fill="causal net") +
-    theme_bw(base_size=25) +
+    theme_bw() +
     theme(legend.position="bottom", axis.text.x=element_text(angle=0, size=11))
   
   ggsave(paste(params$plot_dir, fn, sep=SEP), p, width=18, height=10)
