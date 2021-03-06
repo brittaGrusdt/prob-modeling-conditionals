@@ -4,13 +4,17 @@ source("R/helper-functions.R")
 library(rwebppl)
 library(tidyverse)
 
-params <- configure(c("bias_none", "pl", "targets_default"))
-# params <- configure(c("bias_none", "speaker", "targets_default"))
-# params <- configure(c("bias_none", "speaker_literal", "targets_default"))
-# params <- configure(c("bias_none", "speaker_p_rooij", "targets_default"))
-# params <- configure(c("bias_none", "speaker_uncertain", "targets_default"))
-# params <- configure(c("bias_none", "speaker_certain", "targets_default"))
-# params <- configure(c("priorN", "targets_default"))
+# target="targets_paper_config"
+target="targets_my_config"
+
+params <- configure(c("bias_biscuits", "pl", target))
+# params <- configure(c("bias_none", "pl", target))
+# params <- configure(c("bias_none", "speaker", target))
+# params <- configure(c("bias_none", "speaker_literal", target))
+# params <- configure(c("bias_none", "speaker_p_rooij", target))
+# params <- configure(c("bias_none", "speaker_uncertain", target))
+# params <- configure(c("bias_none", "speaker_certain", target))
+# params <- configure(c("priorN", target))
   # Setup -------------------------------------------------------------------
 dir.create(params$target_dir, recursive = TRUE)
 params$target <- file.path(params$target_dir, params$target_fn, fsep=.Platform$file.sep)
@@ -21,8 +25,8 @@ params$utts_path <- file.path(params$target_dir, params$utts_fn, fsep = .Platfor
 if(!"tables_path" %in% names(params)){
   params$tables_path <- paste(params$target_dir, params$tables_fn, sep=.Platform$file.sep)
 }
-tables <- create_tables(params)
-# tables = readRDS(params$tables_path)
+# tables <- create_tables(params)
+tables = readRDS(params$tables_path)
 params$tables = tables %>% ungroup %>%
   dplyr::select(bn_id, cn, ps, vs, ll)
 
@@ -59,7 +63,7 @@ if(params$level_max == "speaker") {
             paste(params$target_dir, .Platform$file.sep,
                   "sample-ids-", params$target_fn, sep=""))
   speaker_avg <- speaker %>% average_speaker(params) %>% arrange(avg)
-  speaker_avg
+  speaker_avg %>% arrange(desc(avg))
 } else if(params$level_max %in% c("priorN")){
     data <- structure_bns(posterior, params)
 } else if(params$level_max == "log_likelihood"){

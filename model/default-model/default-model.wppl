@@ -44,7 +44,7 @@ if(verbose){
 var run = function(level){
   if(verbose){ display("run " + level + " ...") }
   return level == "prior" ? state_prior(BIAS) :
-         level == "LL" ? literal_listener(UTT, BIAS) : listener(UTT, BIAS)
+         level == "LL" ? literal_listener(UTT) : listener(UTT, BIAS)
 }
 
 var prior = run("prior")
@@ -61,7 +61,7 @@ var wrap_speaker = function(bn){
 
 var wrap_ll = function(u){
   display(u)
-  literal_listener(u, BIAS)
+  literal_listener(u)
 }
 
 var run_speaker = function(bns){

@@ -104,8 +104,8 @@
 
   // Run from R ----------------------------------------------------------------
   var prior = state_prior
-  var ll = literal_listener(utt, BIAS)
-  var pl = listener(utt, BIAS)
+  var ll = literal_listener(utt)
+  var pl = listener(utt)
 
   var wrap_ll = function(u){
     var obj = {"u": u, "LL": literal_listener(u)}

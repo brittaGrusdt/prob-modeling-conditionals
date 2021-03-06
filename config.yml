@@ -15,7 +15,10 @@ default:
   indep_sigma: 0.005
   n_best_cns: 3
 
-targets_default:
+targets_my_config:
+  target_dir: "./data/default-model/my-config"
+
+targets_paper_config:
   target_dir: "./data/default-model/paper-config"
 
 ## 1. bias configurations ##
@@ -26,6 +29,17 @@ bias_none:
   vars: !expr c("A", "C")
   cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
   bias: "none"
+  n_tables: 2000
+  n_ind_tables: 3000
+  tables_fn: "tables-default.rds"
+  
+bias_biscuits:
+  target_fn: "results-biscuits.rds"
+  target_params: "params-biscuits.rds"
+  utts_fn: "utterances-biscuits.rds"
+  vars: !expr c("A", "C")
+  cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
+  bias: "biscuits"
   n_tables: 2000
   n_ind_tables: 3000
   tables_fn: "tables-default.rds"

@@ -8,7 +8,9 @@ source("R/helper-functions.R")
 source("R/default-model/helpers-tables.R")
 
 SEP = .Platform$file.sep
-data_dir = here("data", "default-model", "paper-config")
+# data_dir = here("data", "default-model", "paper-config")
+data_dir = here("data", "default-model", "my-config")
+
 plot_dir = paste(data_dir, "figs", sep=SEP)
 if(!dir.exists(plot_dir)) dir.create(plot_dir)
 params <- read_rds(paste(data_dir, "params-none.rds", sep=SEP))
@@ -114,7 +116,7 @@ plot_evs_cp <- function(data, facets){
            val=recode(val, "cns"="causal nets", "p"="CP-probabilities"))
   
   p <- df %>% ggplot(aes(y=level, x=ev, fill=val_type)) + 
-    geom_bar(position=position_dodge(), stat="identity") +
+    geom_bar(position=position_stack(), stat="identity") +
     # scale_y_discrete(name=paste(strwrap("values", width=20),
     #                             collapse="\n")) +
     scale_fill_discrete(name="value") +
