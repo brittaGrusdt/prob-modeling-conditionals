@@ -92,6 +92,22 @@ skiing:
   target_params: "./data/douven-examples/params-skiing.rds"
   target_vois: "results-skiing-voi.rds"
   tables_fn: "tables-skiing"
+  
+garden_party:
+  model_path: "./model/douven-examples/garden_party.wppl"
+  utt: "D > G"
+  prior_pd: 0.5
+  evidence: "S"
+  condition_on: !expr c("S")
+  level_max: "PL"
+  bias: ""
+  add_accept_conditions: FALSE
+  target_dir: "./data/douven-examples"
+  target: "./data/douven-examples/results-gardenParty.rds"
+  target_fn: "results-gardenParty.rds"
+  target_params: "./data/douven-examples/params-gardenParty.rds"
+  target_vois: "results-gardenParty-voi.rds"
+  tables_fn: "tables-gardenParty"
 
 
 ## 2. Level configurations ##
