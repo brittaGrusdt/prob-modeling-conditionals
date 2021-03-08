@@ -8,8 +8,8 @@ source("R/helper-functions.R")
 source("R/default-model/helpers-tables.R")
 
 SEP = .Platform$file.sep
-# data_dir = here("data", "default-model", "paper-config")
-data_dir = here("data", "default-model", "my-config")
+data_dir = here("data", "default-model", "paper-config")
+# data_dir = here("data", "default-model", "my-config")
 
 plot_dir = paste(data_dir, "figs", sep=SEP)
 if(!dir.exists(plot_dir)) dir.create(plot_dir)
@@ -24,14 +24,19 @@ UTTERANCES <- read_rds(paste(params.speaker$target_dir, params.speaker$utts_fn, 
 params.tables = list(
   seed_tables=params$seed_tables, cns=params$cns, indep_sigma=params$indep_sigma,
   n_best_cns=params$n_best_cns,
-  n_tables=10000, n_ind_tables=20000,
+  n_tables=10000, n_ind_tables=10000,
   tables_path=paste(params$target_dir, "tables-default-samples-for-plots.rds",
-                    sep=.Platform$file.sep)
+                    sep=SEP)
 )
 tables.plot = create_tables(params.tables) %>% select(-cn, -ll) %>%
   rename(cn=cn.orig)
 save_data(tables.plot, params.tables$tables_path)
 plot_tables_cns(params.tables$tables_path, params$plot_dir, w=5, h=5)
+
+# plot tables for samples from prior
+tbls.prior = readRDS(here("data", "default-model", "paper-config",
+                   "results-none-priorN.rds"))
+plot_tables(tbls.prior)
 
 # analyze_table_likelihoods(params)
 
@@ -39,8 +44,8 @@ plot_tables_cns(params.tables$tables_path, params$plot_dir, w=5, h=5)
 # pragmatic/literal interpretations of conditional If A, C
 # probability assigned to states where speaker is uncertain about A and C
 dat.none.voi <- read_rds(
-  paste(params$target_dir, "results-none-prior-LL-PL-vois.rds",
-        sep=.Platform$file.sep)) %>%
+  paste(params$target_dir, "results-none-prior-LL-PL-vois.rds", sep=SEP)
+  ) %>%
   filter((key == "uncertain_both") & level !="prior") %>% 
   mutate(ev=round(ev, 2))
 
@@ -64,7 +69,7 @@ ggsave(paste(params$plot_dir, "ignorance-inferences.png", sep=SEP), p,
 # Figure 4 ----------------------------------------------------------------
 data.speaker <- read_rds(params.speaker$target) %>% select(-level, -bias) %>%
   select(-p_delta, -p_diff)
-bn_ids = read_rds(paste(params.speaker$target_dir, .Platform$file.sep, "sample-ids-",
+bn_ids = read_rds(paste(params.speaker$target_dir, SEP, "sample-ids-",
                         params.speaker$target_fn, sep="")) %>% 
   group_by_all() %>% summarize(n_sampled=n(), .groups="drop_last")
 

@@ -294,9 +294,9 @@ plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="")
 }
 
 # @arg posterior: in long format, must have columns *cell* and *val*
-voi_default <- function(posterior, params){
-  df = posterior %>% ungroup() %>% dplyr::select(-starts_with("p_"))
-  df.wide = df %>% group_by(bn_id) %>%
+voi_default <- function(df, params){
+  df.wide = df %>% ungroup() %>% dplyr::select(-starts_with("p_")) %>%
+    group_by(rowid) %>%
     pivot_wider(names_from="cell", values_from="val") %>%
     add_probs() %>% dplyr::select(!starts_with("p_likely")) %>%
     group_by(level)
@@ -324,7 +324,7 @@ voi_default <- function(posterior, params){
     summarize(ev=sum(prob), .groups="drop_last") %>%
     add_column(key="uncertain_both")
   
-  # expected value P(A)
+  # expected values
   evs = df.wide %>%
     transmute(ev_a=prob*p_a, ev_c=prob*p_c, ev_a_given_c = prob * p_a_given_c,
               ev_nc_given_na= prob * p_nc_given_na) %>%
@@ -341,6 +341,16 @@ voi_default <- function(posterior, params){
     levels = c("prior", "LL", "PL")
   }
   results = results %>% filter(level %in% levels)
+  
+  if(params$add_accept_conditions) {
+    dat=df %>% ungroup %>% select(rowid, cn, p_rooij, p_delta, level, prob) %>% 
+      distinct() %>% group_by(rowid, level) %>%
+      pivot_longer(cols=c(p_rooij, p_delta), names_to="accept.cond", values_to="val") %>%
+      group_by(level, accept.cond, cn) %>% 
+      summarize(ev=sum(prob*val), .groups="drop_last") %>% 
+      unite("key", accept.cond, cn)
+    results = bind_rows(results, dat %>% filter(level %in% levels))
+  }
   
   if(params$save){
     results %>%

@@ -51,8 +51,6 @@ var prior = run("prior")
 globalStore.state_prior = prior
 var all_bns = map(function(obj){obj["bn"]}, (globalStore.state_prior).support())
 if(verbose){display('# states: ' + all_bns.length)}
-// display('single bn: ')
-// display(all_bns[0])
 
 var wrap_speaker = function(bn){
   var state = {bn}
@@ -78,24 +76,14 @@ if(LEVEL_MAX == "speaker"){
   // depending on value of UTT; use (UTT="" for no condition)
   var prior_conditioned = priorConditionedForSpeaker(UTT);
   var n_samples = data["n_samples"][0]
-  // draw n_samples from prior or take all bns from support of prior
+  // define set of input states for speaker_
+  // 1. draw n_sample from prior or
+  // 2. take all bns from support of prior
   var bns = n_samples != 0 ? repeat(n_samples, function(){sample(prior_conditioned)})
                            : all_bns;
-  var all_ids =  _.map(bns, 'id')
-  display('nb bns considered for speaker:' + bns.length)
-  var bns_uniq = []
-  var bn_ids = reduce(function(bn, acc){
-    var idx = acc.indexOf(bn["id"]);
-    if(idx == -1){
-      bns_uniq.push(bn)
-      acc.concat([bn["id"]])
-    } else {
-        acc.concat([])
-    }
-  }, [], bns);
-
-  display('# unique bns that are input to speaker(where condition, if any, holds): ' + bns_uniq.length)
-  var distributions = run_speaker(bns_uniq)
+  var all_ids =  _.map(bns, 'bn_id')
+  display('nb bns considered for speaker (where condition, if any, holds):' + bns.length)
+  var distributions = run_speaker(bns)
   var obj= {distributions, all_ids}
   obj
 
@@ -104,17 +92,20 @@ if(LEVEL_MAX == "speaker"){
   distributions
 
 } else if(LEVEL_MAX == "prior_conditioned"){
-  var distributions = map(function(cn){
-                        display(cn)
-                        Infer({model:function(){
+  // implemented for UTT: certainAandC, uncertainAandC
+  var priorConditioned = Infer({model:function(){
                           var s = sample(globalStore.state_prior)
-                          condition(s["bn"]["cn"] == cn)
+                          var pa = Math.exp(s.bn.table.score("AC")) + Math.exp(s.bn.table.score("A-C"))
+                          var pc = Math.exp(s.bn.table.score("AC")) + Math.exp(s.bn.table.score("-AC"))
+                          condition(speaker_conditions(UTT, s.bn.table, {pa, pc}));
                           return s
                         }})
-                      }, globalStore.cns)
-
-  var obj = {distributions}
-  obj
+  var bns = repeat(data["n_samples"][0], function(){
+    var s = sample(priorConditioned)
+    return(s.bn)
+  })
+  var distributions = {"bns": bns}
+  distributions
 
 } else if (LEVEL_MAX == "priorN"){
   var n_samples = data["n_samples"][0]

@@ -81,21 +81,18 @@ create_tables <- function(params){
   tables_all <- list()
   tables_ind <- create_independent_tables(params)
   tables_dep <- create_dependent_tables(params, cns_dep)
-  tables <- bind_rows(tables_ind, tables_dep) %>% rowid_to_column("id") %>% 
+  tables <- bind_rows(tables_ind, tables_dep) %>% rowid_to_column("table_id") %>% 
               mutate(seed=params$seed_tables)
   tables <- tables %>% unnest(c(vs, ps)) %>%
-    group_by(id) %>% pivot_wider(names_from="vs", values_from="ps") %>% 
+    group_by(table_id) %>% pivot_wider(names_from="vs", values_from="ps") %>% 
     likelihood(params$indep_sigma) %>% 
     mutate(vs=list(c("AC", "A-C", "-AC", "-A-C")),
            ps=list(c(`AC`, `A-C`, `-AC`, `-A-C`))) %>%
     select(-`AC`, -`A-C`, -`-AC`, -`-A-C`) %>%
-    mutate(bn_id=case_when(
-      cn=="A || C" ~ paste(id, "independent", sep="_"),
-      TRUE ~ paste(id, str_replace_all(cn, " ", ""), sep="_"))
-      ) %>%
     rename(cn.orig=cn)
   
-  tables.ll = tables %>% pivot_longer(cols=starts_with("logL_"), names_to="ll_cn", "ll")
+  tables.ll = tables %>% pivot_longer(cols=starts_with("logL_"),
+                                      names_to="ll_cn", "ll")
   for(i in seq(1, params$cns %>% length() - params$n_best_cns)){
     tables.ll = tables.ll %>% mutate(worst_ll=min(value)) %>%
       filter(value!=worst_ll) %>% select(-worst_ll)
@@ -106,7 +103,11 @@ create_tables <- function(params){
                         ll_cn=="logL_if_ca" ~ "C implies A",
                         ll_cn=="logL_if_anc" ~ "A implies -C",
                         ll_cn=="logL_if_cna" ~ "C implies -A")) %>%
-    rename(ll=value) %>% select(-ll_cn, -ind.lower, -ind.upper) 
+    rename(ll=value) %>% select(-ll_cn, -ind.lower, -ind.upper) %>%
+    mutate(bn_id=case_when(
+      cn=="A || C" ~ paste(table_id, "independent", sep="_"),
+      TRUE ~ paste(table_id, str_replace_all(cn, " ", ""), sep="_"))
+      )
   
   tables %>% save_data(params$tables_path)
   return(tables)
@@ -138,15 +139,15 @@ plot_tables <- function(data){
       ggplot(aes(x=val,  color = cell)) +
       geom_density() +
       facet_wrap(~cell, ncol = 2, scales = "free",
-                 labeller = labeller(cell = c(`AC` = "P(A,C)", `A-C` = "P(A,¬C)",
-                                              `-AC`= "P(¬A,C)", `-A-C` = "P(¬A,¬C)"))
+                 labeller = labeller(cell =
+                                       c(`-A-C` = "P(¬A,¬C)", `-AC`= "P(¬A,C)",
+                                         `A-C` = "P(A,¬C)", `AC` = "P(A,C)"))
                  ) +
       labs(title = cn_title, x=xlab, y=ylab) +
-      theme_classic(base_size = 20) +
+      theme_classic() +
       theme(legend.position = "none", axis.text.x = element_text(size=10))
     plots[[idx]] <- p
     idx <- idx + 1
-    print(p)
   }
   return(plots)
 }
@@ -154,7 +155,7 @@ plot_tables <- function(data){
 # plot densities of generated tables for different causal nets
 plot_tables_cns <- function(tables_path, plot_dir, w, h){
   tables.wide <- readRDS(tables_path) %>% unnest_tables() %>% ungroup() %>%
-    select(-id, -rowid) %>% group_by(bn_id) %>% 
+    select(-table_id) %>% group_by(rowid) %>% 
     pivot_wider(names_from = cell, values_from = val)
   tables.long <- tables.wide %>% 
     # mutate(`-A-C` = case_when(is.na(`-A-C`) ~ rowSums(select(., starts_with("-A-C_"))),
@@ -165,7 +166,8 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
     #                          TRUE ~ `A-C`),
     #        `AC` = case_when(is.na(`AC`) ~ rowSums(select(., starts_with("AC_"))),
     #                         TRUE ~ `AC`)) %>% 
-    pivot_longer(cols = c(AC, `A-C`, `-AC`, `-A-C`), names_to = "cell", values_to = "val") %>% 
+    pivot_longer(cols = c(AC, `A-C`, `-AC`, `-A-C`), names_to = "cell",
+                 values_to = "val") %>% 
     group_by(bn_id, cn) %>% 
     mutate(cell=factor(cell, levels=c("AC", "A-C", "-AC", "-A-C")),
            cn=case_when(cn=="A || C" ~ "A,C independent",

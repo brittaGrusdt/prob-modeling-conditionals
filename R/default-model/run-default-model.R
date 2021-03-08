@@ -4,18 +4,21 @@ source("R/helper-functions.R")
 library(rwebppl)
 library(tidyverse)
 
-# target="targets_paper_config"
-target="targets_my_config"
+target="targets_paper_config"
+# target="targets_my_config"
 
-params <- configure(c("bias_biscuits", "pl", target))
-# params <- configure(c("bias_none", "pl", target))
+# params <- configure(c("bias_biscuits", "pl", target))
+params <- configure(c("bias_none", "pl", target))
 # params <- configure(c("bias_none", "speaker", target))
 # params <- configure(c("bias_none", "speaker_literal", target))
 # params <- configure(c("bias_none", "speaker_p_rooij", target))
 # params <- configure(c("bias_none", "speaker_uncertain", target))
 # params <- configure(c("bias_none", "speaker_certain", target))
 # params <- configure(c("priorN", target))
-  # Setup -------------------------------------------------------------------
+# params <- configure(c("bias_none", "prior", target))
+# params <- configure(c("priorConditioned", target))
+
+# Setup -------------------------------------------------------------------
 dir.create(params$target_dir, recursive = TRUE)
 params$target <- file.path(params$target_dir, params$target_fn, fsep=.Platform$file.sep)
 params$target_params <- file.path(params$target_dir, params$target_params, fsep=.Platform$file.sep)
@@ -25,10 +28,10 @@ params$utts_path <- file.path(params$target_dir, params$utts_fn, fsep = .Platfor
 if(!"tables_path" %in% names(params)){
   params$tables_path <- paste(params$target_dir, params$tables_fn, sep=.Platform$file.sep)
 }
-# tables <- create_tables(params)
-tables = readRDS(params$tables_path)
+tables <- create_tables(params)
+# tables = readRDS(params$tables_path)
 params$tables = tables %>% ungroup %>%
-  dplyr::select(bn_id, cn, ps, vs, ll)
+  dplyr::select(bn_id, cn, ps, vs, ll) %>% group_by(bn_id)
 
 ##---- Generate/Retrieve utterances ----##
 generate_utts <- function(params){
@@ -59,12 +62,12 @@ if(!dir.exists(params$plot_dir)){
 # restructure data and save
 if(params$level_max == "speaker") {
   speaker <- posterior$distributions %>% structure_speaker_data(params)
-  save_data(posterior$all_ids %>% rename(stimulus_id=value),
+  save_data(posterior$all_ids %>% rename(bn_id=value),
             paste(params$target_dir, .Platform$file.sep,
                   "sample-ids-", params$target_fn, sep=""))
-  speaker_avg <- speaker %>% average_speaker(params) %>% arrange(avg)
+  speaker_avg <- speaker %>% average_speaker(params)
   speaker_avg %>% arrange(desc(avg))
-} else if(params$level_max %in% c("priorN")){
+} else if(params$level_max %in% c("prisorN", "prior_conditioned")){
     data <- structure_bns(posterior, params)
 } else if(params$level_max == "log_likelihood"){
   data <- tibble(id=posterior$id$value, cn=posterior$cn$value,

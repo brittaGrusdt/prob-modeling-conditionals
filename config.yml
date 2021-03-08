@@ -171,6 +171,14 @@ priorN:
   level_max: "priorN"
   utt: ""
   n_samples: 20000
+  
+priorConditioned:
+  inherits: bias_none
+  target_fn: "results-none-prior_conditioned.rds"
+  target_params: "params-none-prior_conditioned.rds"
+  level_max: "prior_conditioned"
+  utt: "certainAandC"
+  n_samples: 20000
 
 ll:
   level_max: "LL"
