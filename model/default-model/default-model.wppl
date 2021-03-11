@@ -1,6 +1,5 @@
 // Parameters
 globalStore.thresholds = {theta: data["theta"][0], theta_likely : 0.5}
-
 // states + utterances
 globalStore.cns = data["cns"]
 globalStore.dep_cns = _.without(data["cns"], "A || C");
@@ -47,15 +46,9 @@ var run = function(level){
          level == "LL" ? literal_listener(UTT) : listener(UTT, BIAS)
 }
 
-var prior = run("prior")
-globalStore.state_prior = prior
-var all_bns = map(function(obj){obj["bn"]}, (globalStore.state_prior).support())
+globalStore.state_prior = run("prior")
+var all_bns = globalStore.state_prior.support()
 if(verbose){display('# states: ' + all_bns.length)}
-
-var wrap_speaker = function(bn){
-  var state = {bn}
-  speaker(state, BIAS, false)
-}
 
 var wrap_ll = function(u){
   display(u)
@@ -64,7 +57,7 @@ var wrap_ll = function(u){
 
 var run_speaker = function(bns){
   var distrs = map(function(bn){
-   wrap_speaker(bn)
+    speaker(bn, BIAS, false)
   }, bns)
   var distributions = {"speaker_": distrs, "bns": bns}
   distributions
@@ -74,13 +67,17 @@ var run_speaker = function(bns){
 if(LEVEL_MAX == "speaker"){
   // run speaker with only bayes nets for which certain conditions may hold
   // depending on value of UTT; use (UTT="" for no condition)
-  var prior_conditioned = priorConditionedForSpeaker(UTT);
+  var prior_conditioned = UTT != "" ? priorConditionedForSpeaker(UTT) :
+    globalStore.state_prior;
   var n_samples = data["n_samples"][0]
   // define set of input states for speaker_
   // 1. draw n_sample from prior or
-  // 2. take all bns from support of prior
-  var bns = n_samples != 0 ? repeat(n_samples, function(){sample(prior_conditioned)})
-                           : all_bns;
+  // 2. compute predictions just for given set of bn_ids or
+  // 3. take all bns from support of prior
+  var bns = n_samples != 0 ? repeat(n_samples, function(){sample(prior_conditioned)}) :
+            data["speaker_bn_ids"] ? filter(function(bn){
+              return data["speaker_bn_ids"].includes(bn.bn_id)
+            }, all_bns) : all_bns;
   var all_ids =  _.map(bns, 'bn_id')
   display('nb bns considered for speaker (where condition, if any, holds):' + bns.length)
   var distributions = run_speaker(bns)
@@ -95,14 +92,14 @@ if(LEVEL_MAX == "speaker"){
   // implemented for UTT: certainAandC, uncertainAandC
   var priorConditioned = Infer({model:function(){
                           var s = sample(globalStore.state_prior)
-                          var pa = Math.exp(s.bn.table.score("AC")) + Math.exp(s.bn.table.score("A-C"))
-                          var pc = Math.exp(s.bn.table.score("AC")) + Math.exp(s.bn.table.score("-AC"))
-                          condition(speaker_conditions(UTT, s.bn.table, {pa, pc}));
+                          var pa = Math.exp(s.table.score("AC")) + Math.exp(s.table.score("A-C"))
+                          var pc = Math.exp(s.table.score("AC")) + Math.exp(s.table.score("-AC"))
+                          condition(speaker_conditions(UTT, s.table, {pa, pc}));
                           return s
                         }})
   var bns = repeat(data["n_samples"][0], function(){
     var s = sample(priorConditioned)
-    return(s.bn)
+    return s
   })
   var distributions = {"bns": bns}
   distributions
@@ -112,7 +109,7 @@ if(LEVEL_MAX == "speaker"){
   display('sample ' + n_samples + ' states from prior...')
   var bns = repeat(n_samples, function(){
     var s = sample(globalStore.state_prior)
-    return(s.bn)
+    return s
   })
   var distributions = {"bns": bns}
   distributions
@@ -123,7 +120,7 @@ if(LEVEL_MAX == "speaker"){
   map(function(bn){
     var ll = log_likelihood(bn)
     // display(bn.id + ' '  + bn.table + ' ' + bn.cn + '' + ll)
-    likelihoods.push({"cn": bn.cn, "logL": ll, "id": bn.id});
+    likelihoods.push({"cn": bn.cn, "logL": ll, "id": bn.bn_id});
   }, all_bns)
   likelihoods
 } else{

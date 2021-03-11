@@ -4,12 +4,12 @@ webppl_distrs_to_tibbles <- function(posterior){
     x <- x %>% rowid_to_column() 
     bn_probs <- x %>% dplyr::select("probs", "rowid")
     data_tibble <- x$support %>% rowid_to_column() %>% 
-                    unnest(cols = c(bn.table.probs, bn.table.support)) %>%
+                    unnest(cols = c(table.probs, table.support)) %>%
                     as_tibble() %>% 
                     left_join(bn_probs, by = "rowid") %>% 
                     mutate("rowid" = as.character(rowid)) %>%
                     add_column(level=y) %>% 
-                    rename(prob=probs, val=bn.table.probs, cell=bn.table.support, cn=bn.cn)
+                    rename(prob=probs, val=table.probs, cell=table.support)
     return(data_tibble)             
   })
   df <- bind_rows(posterior_tibbles)
