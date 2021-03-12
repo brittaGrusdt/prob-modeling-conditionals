@@ -98,8 +98,8 @@ if(verbose){
 
 // Run from R ----------------------------------------------------------------
 var prior = state_prior
-var ll = literal_listener(utt, BIAS)
-var pl = listener(utt, BIAS)
+var ll = literal_listener(utt)
+var pl = listener(utt)
 
 // object to return
 var distributions = {"PL": pl, "LL": ll, "prior": prior}

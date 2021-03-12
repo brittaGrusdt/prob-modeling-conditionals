@@ -14,8 +14,6 @@ globalStore.bns = map(function(obj){
   }
 }, tables_list)
 
-globalStore.indep_sigma = data["indep_sigma"][0]
-
 if(verbose){
   display("bias: " + bias)
   display("theta: " + globalStore.thresholds.theta)

@@ -21,9 +21,6 @@ var BIAS = data["bias"][0]
 globalStore.bias = BIAS
 var UTT = data["utt"][0]
 
-// parameter for likelihood functions
-globalStore.indep_sigma = data["indep_sigma"][0]
-
 // output parameters
 var LEVEL_MAX = data["level_max"][0]
 var verbose = data["verbose"][0]
@@ -43,7 +40,7 @@ if(verbose){
 var run = function(level){
   if(verbose){ display("run " + level + " ...") }
   return level == "prior" ? state_prior(BIAS) :
-         level == "LL" ? literal_listener(UTT) : listener(UTT, BIAS)
+         level == "LL" ? literal_listener(UTT) : listener(UTT)
 }
 
 globalStore.state_prior = run("prior")
