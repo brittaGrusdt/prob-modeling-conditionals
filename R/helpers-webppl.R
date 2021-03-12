@@ -52,7 +52,7 @@ run_webppl <- function(path_wppl_file, params){
   return(data)
 }
 
-structure_listener_data <- function(posterior, params){
+structure_listener_data <- function(posterior, params, tbls.map){
   df_long <- posterior %>% webppl_distrs_to_tibbles() %>%
               add_column(bias=params$bias)
   if(params$add_accept_conditions){
@@ -62,11 +62,14 @@ structure_listener_data <- function(posterior, params){
       pivot_longer(cols=c(AC, `A-C`, `-AC`, `-A-C`),
                    names_to="cell", values_to="val")
   }
+  df = left_join(df_long, tbls.map, by="bn_id") %>%
+    group_by(bn_id) %>% select(-rowid)
+
   if(params$save){
-    df_long %>% save_data(paste(params$target_dir, params$target_fn, sep= .Platform$file.sep))
+    df %>% save_data(paste(params$target_dir, params$target_fn, sep= .Platform$file.sep))
     params %>% save_data(params$target_params)
   }
-  return(df_long)
+  return(df)
 }
 
 
@@ -112,7 +115,7 @@ webppl_speaker_distrs_to_tibbles <- function(posterior){
   return(speaker_wide)
 }
 
-structure_speaker_data <- function(posterior, params){
+structure_speaker_data <- function(posterior, params, tbls.map){
   speaker_wide <- webppl_speaker_distrs_to_tibbles(posterior)
   bns = posterior$bns %>% rowid_to_column() %>% group_by(rowid) %>%
     unnest(c(table.probs, table.support)) %>%
@@ -128,11 +131,13 @@ structure_speaker_data <- function(posterior, params){
                   names_to = "utterance", values_to = "probs") %>%
         add_column(bias=params$bias)
   
+  sp = left_join(df, tbls.map, by="bn_id")
+  
   if(params$save){
-    df %>% save_data(params$target)
+    sp %>% save_data(params$target)
     params %>% save_data(params$target_params)
   }
-  return(df)
+  return(sp)
 }
 
 # @distrs: long format with columns: utterance

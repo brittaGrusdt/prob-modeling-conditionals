@@ -9,8 +9,8 @@ target="targets_my_config"
 
 # params <- configure(c("bias_biscuits", "pl", target))
 # params <- configure(c("bias_none", "pl", target))
-# params <- configure(c("bias_none", "speaker", target))
-params <- configure(c("bias_none", "speaker_literal", target))
+params <- configure(c("bias_none", "speaker", target))
+# params <- configure(c("bias_none", "speaker_literal", target))
 # params <- configure(c("bias_none", "speaker_p_rooij", target))
 # params <- configure(c("bias_none", "speaker_uncertain", target))
 # params <- configure(c("bias_none", "speaker_certain", target))
@@ -62,8 +62,8 @@ if(!dir.exists(params$plot_dir)){
 
 # restructure data and save
 if(params$level_max == "speaker") {
-  speaker <- posterior$distributions %>% structure_speaker_data(params)
-  sp = left_join(speaker, tbls.map, by="bn_id")
+  speaker <- posterior$distributions %>%
+    structure_speaker_data(params, tbls.map)
   save_data(posterior$all_ids %>% rename(bn_id=value),
             paste(params$target_dir, .Platform$file.sep,
                   "sample-ids-", params$target_fn, sep=""))
@@ -75,6 +75,6 @@ if(params$level_max == "speaker") {
   data <- tibble(id=posterior$id$value, cn=posterior$cn$value,
                  logL=posterior$logL$value)
 } else {
-  data <- posterior %>% structure_listener_data(params)
+  data <- posterior %>% structure_listener_data(params, tbls.map)
   data_voi <- voi_default(data, params)
 }
