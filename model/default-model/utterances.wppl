@@ -48,7 +48,7 @@ if(verbose){
 }
 
 var utts_to_remove = filter(function(u){
-  !any(function(s){meaning(u, s["bn"]["table"])}, all_states)
+  !any(function(s){meaning(u, s["table"])}, all_states)
 }, utterances)
 
 if(verbose){

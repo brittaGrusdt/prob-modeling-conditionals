@@ -140,7 +140,7 @@ average_speaker <- function(distrs, params){
   data <- distrs %>% group_by(utterance)
   data.cns <- distrs %>% group_by(utterance, cn)
   df <- data %>% summarise(avg=mean(probs)) %>% add_column(bias=params$bias)
-  df_cns <- data.cns %>% summarise(avg=mean(probs), .groups="keep") %>%
+  df_cns <- data.cns %>% summarise(avg=round(mean(probs), 3), .groups="keep") %>%
     add_column(bias=params$bias) %>% arrange(avg)
 
   if(params$save){
@@ -148,5 +148,5 @@ average_speaker <- function(distrs, params){
     df %>% save_data(paste(fn[[1]][1], "-avg.rds", sep=""))
     df_cns %>% save_data(paste(fn[[1]][1], "-avg-cns.rds", sep=""))
   }
-  return(df)
+  return(df_cns)
 }
