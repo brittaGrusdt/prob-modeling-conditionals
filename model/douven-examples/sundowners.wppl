@@ -85,7 +85,7 @@
     // var cn = flip(prior_cn2) ? "cn2" : "cn1"
     var cn = sample(prior_cns)
     var bn = uniform_draw_bn(cn)
-    return {bn}
+    return bn
   }})
 
   globalStore.state_prior = state_prior
@@ -93,7 +93,7 @@
   // check which utterances need to be removed (e.g.because there's no corresponding state)
   var all_states = state_prior.support()
   var utts_to_remove = filter(function(u){
-    !any(function(s){meaning(u,s["bn"]["table"])}, all_states)
+    !any(function(s){meaning(u,s["table"])}, all_states)
   }, utterances)
   display('# utts without corresponding state: ' + utts_to_remove.length)
   // map(display, utts_to_remove)

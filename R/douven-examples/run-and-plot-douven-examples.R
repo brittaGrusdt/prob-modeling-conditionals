@@ -5,6 +5,8 @@ library(here)
 source("R/helper-functions.R")
 source("R/helpers-webppl.R")
 
+library(RColorBrewer)
+
 # Run Model ---------------------------------------------------------------
 get_douven_data_evs <- function(params){
   if(!dir.exists(params$target_dir)) {
@@ -77,12 +79,12 @@ douven.data <- bind_rows(sundowners.data, skiing.marginal, garden_party.marginal
 
 plot_douven_cases <- function(data){
   df = tribble(~limits, ~labels, ~example,
-               "R > W > S", "R->W->S", "sundowners",
+               "R > W > S", expression(R %->% W %->% S), "sundowners",
                "R||S", "R,S indep.", "sundowners", 
-               "E || S>C", "E indep. S, S->C", "skiing",
-               "E>S>C", "E->S->C", "skiing",
-               "D || G>-S", "D indep. G, G->¬S","gardenParty", 
-               "D>G>-S", "D->G->¬S", "gardenParty")
+               "E || S>C", expression(paste("E, S indep.,", S %->% C)), "skiing",
+               "E>S>C", expression(E %->% S %->% C), "skiing",
+               "D || G>-S", expression(paste("D, G indep.,",G %->%"","¬S")), "gardenParty", 
+               "D>G>-S", expression(paste(D %->% G %->%"", "¬S")), "gardenParty")
   ex.in = data$example %>% unique()
   df = df %>% filter(example %in% ex.in)
   p <- data %>% mutate(level=as.factor(level)) %>%
@@ -101,21 +103,19 @@ plot_douven_cases <- function(data){
         paste(strwrap("Literal interpretation", width=20), collapse="\n"),
         "Prior Belief"
       )) +
-    scale_fill_discrete(name="causal net",
-                        limits = df$limits,
-                        labels = df$labels
-                      ) +
+    scale_fill_brewer(palette="Dark2",
+                      name="causal net",
+                      limits = df$limits,
+                      labels = df$labels
+                     ) +
     labs(x="Expected value", title="") +
-    theme_bw() + theme(legend.position="bottom")
-  
+    theme_bw() + theme(legend.position="top")
+
   return(p)
 }
 
-p <- douven.data %>% filter(example != "gardenParty") %>% 
-  plot_douven_cases()
-ggsave(here("data", "douven-examples", "skiing-sundowners.png"), p, width=6, height=4)
-
-p <- douven.data %>% filter(example == "gardenParty") %>% 
-  plot_douven_cases()
-ggsave(here("data", "douven-examples", "gardenParty.png"), p, width=6, height=4)
-
+for(ex in c("gardenParty", "sundowners", "skiing")) {
+  p <- douven.data %>% filter(example == !!(ex)) %>% plot_douven_cases()
+  ggsave(here("data", "douven-examples", paste(ex, ".png", sep="")), p, width=6, height=4)
+}
+message(paste('saved plots to', here("data", "douven-examples")))

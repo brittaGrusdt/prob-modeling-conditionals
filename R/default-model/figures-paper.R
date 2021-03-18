@@ -31,9 +31,9 @@ params.tables = list(
 tables.plot = create_tables(params.tables) %>% select(-cn, -ll) %>%
   rename(cn=cn.orig)
 save_data(tables.plot, params.tables$tables_path)
-plot_tables_cns(params.tables$tables_path, params$plot_dir, w=5, h=5)
+plot_tables_cns(params.tables$tables_path, params$plot_dir, w=3, h=3)
 
-# plot tables for samples from prior
+#-- plot tables for samples from prior --#
 tbls.prior = readRDS(here("data", "default-model", "paper-config",
                    "results-none-priorN.rds"))
 plot_tables(tbls.prior)
@@ -59,9 +59,10 @@ p <- dat.none.voi %>%
   ) + 
   labs(y= TeX("$\\sum_{s\\in Uncertain_s(A) \\bigcap Uncertain_s(C) \\}
             Pr(s|u=A\\rightarrow C)$"), x="") +
-  theme_classic() +
+  theme_minimal() +
   theme(legend.position = "none") +
   coord_flip()
+  
 ggsave(paste(params$plot_dir, "ignorance-inferences.png", sep=SEP), p,
        width=13.5, height=4)
 
@@ -77,7 +78,7 @@ data.speaker.best <- data.speaker %>% group_by(bn_id) %>%
   mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
   unnest(c(u_best)) %>% select(-p_best)
 
-data.speaker.best = left_join(data.speaker.best, bn_ids, by=c("stimulus_id"))
+data.speaker.best = left_join(data.speaker.best, bn_ids, by=c("bn_id"))
 
 dat <- data.speaker.best %>%
   mutate(pa=`AC` + `A-C`, pc=`AC` + `-AC`,
@@ -107,34 +108,11 @@ df <- dat %>%
                                              "A (C) certain, C (A) uncertain"))) %>%
   chunk_cns()
 
-p = plot_speaker(df, "bottom", facets=TRUE, xlab="proportion", ylab="best utterance")
+p = plot_speaker_conditions(df)
 ggsave(paste(params.speaker$plot_dir, "speaker_freq_best_un_certain_other.png",
-             sep=SEP), p)
+             sep=SEP), width=7, height=2.5)
 
 # Figure 5 ----------------------------------------------------------------
-plot_evs_cp <- function(data, facets){
-  df = data %>%
-    mutate(kind=case_when(val == "p" ~ "CP-propositions",
-                          val_type == "A,C indep." ~ "cn.ind",
-                          val_type %in% c("A -> C", "C -> A") ~ "cns.dep.pos", 
-                          val_type %in% c("A -> ¬C", "C -> ¬A") ~ "cns.dep.neg"),
-           val=recode(val, "cns"="causal nets", "p"="CP-probabilities"))
-  
-  p <- df %>% ggplot(aes(y=level, x=ev, fill=val_type)) + 
-    geom_bar(position=position_stack(), stat="identity") +
-    # scale_y_discrete(name=paste(strwrap("values", width=20),
-    #                             collapse="\n")) +
-    scale_fill_discrete(name="value") +
-    #                     breaks=c("prior", "LL", "PL"),
-    #                     labels=c("A priori", "Literal", "Pragmatic")) +
-    labs(x="Degree of belief", y="Interpretation level") +
-    theme_bw() +
-    theme(legend.position="top") +
-    facet_wrap(~val, labeller=as_labeller(facets))
-    # theme(legend.position = c(.95, .95), legend.justification=c("right", "top"))
-  return(p)
-}
-
 data_cp_plots <- function(params){
   data <- read_rds(params$target) %>%
     ungroup() %>% group_by(bn_id, level) %>% select(-p_delta, -p_rooij, -p_diff, -bias)
@@ -167,15 +145,37 @@ data_cp_plots <- function(params){
   return(data)  
 }
   
-data.cp.none = data_cp_plots(params)
-facets = list("cns"="causal nets", "p"="CP-probabilities")
-p <- plot_evs_cp(data.cp.none, facets) 
-  
-ggsave(paste(params$plot_dir, "none-evs-cp.png", sep=SEP), p, width=6.7, height=3)
+data.cp = data_cp_plots(params) 
+cp.cns = data.cp %>% filter(val=="cns") %>% 
+  mutate(val_type=factor(val_type, levels=c("A,C indep.", "A -> C",
+                                               "A -> ¬C", "C -> A", "C -> ¬A")))
+labels.cp = tribble(~ val, ~label,
+                    "A,C indep.", "A,C indep.",
+                    "A -> C", expression(A %->% C),
+                    "A -> ¬C", expression(A%->%~"¬C"),
+                    "C -> A",expression(C %->% A),
+                    "C -> ¬A", expression(C%->%~"¬A"))
+
+p.probs <- data.cp %>% filter(val=="p") %>% 
+  ggplot(aes(y=level, x=ev, fill=val_type)) + 
+  geom_bar(position=position_dodge(), stat="identity") +
+  scale_fill_brewer(palette="Dark2", name="value") +
+  labs(x="Degree of belief", y="Interpretation level") +
+  theme_minimal() + theme(legend.position="top", legend.key.size = unit(0.75,"line"))
+
+p.cns <- cp.cns %>% 
+  ggplot(aes(y=level, x=ev, fill=val_type)) + 
+  geom_bar(position=position_stack(), stat="identity") +
+  scale_fill_brewer(palette="Dark2", name="value", labels=labels.cp$label) +
+  labs(x="Degree of belief", y="Interpretation level") +
+  theme_minimal() + theme(legend.position="top", legend.key.size = unit(0.75,"line"))
+
+ggsave(paste(params$plot_dir, "cp-evs-probs.png", sep=SEP), p.probs, width=5, height=2)
+ggsave(paste(params$plot_dir, "cp-evs-cns.png", sep=SEP), p.cns, width=5, height=2)
 
 
 # Figure 6 ----------------------------------------------------------------
-plot_accept_conditions <- function(dat, fn){
+plot_accept_conditions <- function(dat){
   x_labels <- c(c(-100000, -1000, -50, -10, -1),
                 seq(from=-0.75, by=0.25, to=0.7),
                 seq(from=0.75, by=0.05, to=1))
@@ -185,7 +185,9 @@ plot_accept_conditions <- function(dat, fn){
       `pragmatic-speaker` = paste(strwrap("Pragmatic speaker", width=15), collapse="\n"),
       `prior` = "Prior")
   )
-  condition_labels = as_labeller(c(`p_rooij`= "△*P", `p_delta`="△P", `p_diff`="P(C|A)-P(C)"))
+  condition_labels = as_labeller(c(`p_rooij`= "△*P",
+                                   `p_delta`="△P",
+                                   `p_diff`="P(C|A)-P(C)"))
   cn_labels = as_labeller(dat$cn %>% unique())
   # x-axis binned into different non-linear intervals (groups)
   getGroup = function(val) {
@@ -198,29 +200,25 @@ plot_accept_conditions <- function(dat, fn){
     return(i-1)
   }
   
-  data <- dat %>% group_by(bn_id, level, condition) %>%
-    mutate(group = getGroup(val)) %>%
-    group_by(level, condition, group, cn) %>%
-    mutate(n_sampled=as.numeric(n_sampled)) %>% 
-    mutate(n_sampled=case_when(is.na(n_sampled) ~ 1,
-                               TRUE ~ n_sampled))
-  data.sum <- data %>% 
-    summarise(count=sum(n_sampled), .groups="drop_last") %>%
+  data <- dat %>% group_by(rowid, level, condition) %>%
+    mutate(group = getGroup(val))
+  data.sum <- data %>% group_by(level, condition, group, cn) %>% 
+    summarise(count=n(), .groups="drop_last") %>%
     group_by(level, condition) %>%
     mutate(ratio = count/sum(count))
   
   p <- data.sum %>% ggplot(aes(x=group, fill=cn)) +
-    facet_grid(level~condition, scales="free", labeller=
-                 labeller(level=level_labels, condition=condition_labels))
-  
-  p <- p + geom_bar(aes(y=ratio), stat="identity", position="dodge") +
+    facet_wrap(~level, scales="free", labeller=
+                 labeller(level=level_labels)) +
+    geom_bar(aes(y=ratio), stat="identity", position="dodge") +
     scale_x_continuous(breaks=x_breaks, labels=x_labels) +
-    labs(x=paste(strwrap("accept/assert condition value intervals", width=25), collapse="\n"),
+    labs(x=paste(strwrap("accept/assert condition value intervals", width=25),
+                 collapse="\n"),
          y="ratio", fill="causal net") +
-    theme_bw() +
-    theme(legend.position="bottom", axis.text.x=element_text(angle=0, size=11))
-  
-  ggsave(paste(params$plot_dir, fn, sep=SEP), p, width=18, height=10)
+    scale_fill_brewer(palette="Dark2") +
+    theme_minimal() +
+    theme(legend.position="top",
+          axis.text.x=element_text(angle=40, size=8))
   return(p)
 }
 
@@ -230,40 +228,32 @@ prior <-  read_rds(params.prior$target) %>%
   mutate(level = "prior") %>% select(-bias)
 params.sp_literal <- read_rds(paste(data_dir, "params-speaker-literal.rds", sep=SEP))
 
-formatSpeaker <- function(params, cat) {
-  bn_ids = read_rds(paste(params$target_dir, .Platform$file.sep, "sample-ids-",
-                          params$target_fn, sep="")) %>% 
-    group_by_all() %>% summarize(n_sampled=n(), .groups="drop_last")
-  speaker <- read_rds(file.path(params$target_dir, params$target_fn)) %>%
-    select(-bias) %>% group_by(bn_id, cn) %>%
-    mutate(utterance = paste("utt", utterance, sep="_")) %>% 
-    pivot_wider(names_from = utterance, values_from=probs) %>%
-    mutate(level = cat)
-  sp = left_join(speaker, bn_ids, by=c("stimulus_id"))
-  return(sp)
-}
-
 # get data from implemented literal speaker (conditioned s.t. A > C is true)
-speaker.literal <- formatSpeaker(params.sp_literal, "literal-speaker")
-speaker.literal.best = speaker.literal %>% 
+speaker.literal <- read_rds(file.path(params$target_dir, params$target_fn)) %>%
+  select(-bias) %>%
+  mutate(utterance = paste("utt", utterance, sep="_"),
+         level="literal-speaker") %>% 
+  pivot_wider(names_from = utterance, values_from=probs)
+
+speaker.literal.best = speaker.literal %>% group_by(rowid) %>% 
   pivot_longer(cols = starts_with("utt_"), names_to = "utterance",
-             values_to = "probs") %>% 
+             values_to = "probs") %>%
   group_by(bn_id, level, cn) %>% 
-  mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
-  unnest(u_best)
+  mutate(p_best=max(probs), u_best = probs == max(probs)) %>% 
+  group_by(bn_id, level, cn, rowid) %>% 
+  filter(u_best) %>% dplyr::select(-p_best, -u_best)
 
+# best utterance is A > C
 speaker.pragmatic <- speaker.literal.best %>%
-  filter(u_best == "utt_A > C") %>%
+  filter(utterance == "utt_A > C") %>% 
   mutate(level = "pragmatic-speaker") %>%
-  select(-u_best, -p_best) %>%
-  pivot_wider(names_from = "utterance", values_from = "probs") 
+  group_by(rowid)
 
-speakers = bind_rows(speaker.literal, speaker.pragmatic)
-
-df <- bind_rows(prior, speaker.literal, speaker.pragmatic) %>%
-  group_by(bn_id, cn, level) %>%
+speakers = bind_rows(speaker.literal, speaker.pragmatic) %>% 
+  select(-starts_with("utt"))
+df <- bind_rows(prior, speakers) %>%
+  group_by(rowid, level) %>%
   pivot_longer(cols=c(p_delta, p_rooij, p_diff), names_to="condition", values_to = "val") %>% 
-  select(-starts_with("utt")) %>%
   mutate(
     level=factor(level, levels = c("prior", "literal-speaker", "pragmatic-speaker")), 
     cn = case_when(cn == "A || C" ~ "A,C indep.",
@@ -271,9 +261,10 @@ df <- bind_rows(prior, speaker.literal, speaker.pragmatic) %>%
     ),
     condition = factor(condition, levels = c("p_rooij", "p_delta", "p_diff"))
   ) %>% 
-  group_by(bn_id, level, condition)
+  group_by(rowid, level, condition)
 
-plot_accept_conditions(df %>% filter(condition != "p_diff"), "accept-conditions.png")
+p = plot_accept_conditions(df %>% filter(condition == "p_rooij"))
+ggsave(paste(params$plot_dir, "accept-conditions.png", sep=SEP), p, width=10, height=4)
 
 # -------------- additional checks on tables of pragmatic speaker condition
 speaker.pragmatic.long = speaker.pragmatic %>% 

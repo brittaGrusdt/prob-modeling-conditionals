@@ -269,6 +269,22 @@ plot_evs <- function(data){
   return(p)
 }
 
+plot_speaker_conditions <- function(data) {
+  df <- data %>% mutate(p=round(as.numeric(p), 2),
+                        utterance=as.character(utterance))
+  p <- df %>%
+    ggplot(aes(y=utterance, x=p, fill=cn)) +
+    guides(fill=guide_legend(title="causal net")) +
+    # p <-  df %>% ggplot(aes(y=utterance, x=p, fill=speaker_condition))
+    geom_bar(stat="identity", position=position_dodge())  +
+    labs(x="proportion", y="best utterance") + theme_minimal() +
+    facet_wrap(~speaker_condition) +
+    theme(axis.text.y=element_text(), legend.position="top",
+          legend.key.size = unit(0.75,"line")) +
+    scale_fill_brewer(palette="Dark2")
+  return(p)
+}
+
 plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="") {
   df <- data %>% mutate(p=round(as.numeric(p), 2))
   if(xlab==""){xlab = TeX("$\\frac{1}{|S|} \\cdot \\sum_{s \\in S} P_S(u|s)$")}
@@ -284,19 +300,19 @@ plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="")
     p <-  df %>% ggplot(aes(y=utterance, x=p))
   }
   p <- p +
-    # geom_bar(stat="identity", position=position_stack())  +
     geom_bar(stat="identity", position=position_dodge(preserve="single"))  +
-    labs(x=xlab, y=ylab) + theme_bw()
+    labs(x=xlab, y=ylab) + theme_minimal()
   if(facets) {p <- p + facet_wrap(~speaker_condition)
   }
-  p <- p + theme(axis.text.y=element_text(), legend.position=legend_pos)
+  p <- p + theme(axis.text.y=element_text(), legend.position=legend_pos) +
+    scale_fill_brewer(palette="Dark2")
   return(p)
 }
 
 # @arg posterior: in long format, must have columns *cell* and *val*
 voi_default <- function(dat, params){
   df.wide = dat %>% ungroup() %>% dplyr::select(-starts_with("p_")) %>%
-    group_by(rowid) %>%
+    group_by(bn_id, level) %>%
     pivot_wider(names_from="cell", values_from="val") %>%
     add_probs() %>% dplyr::select(!starts_with("p_likely")) %>%
     group_by(level)
@@ -344,8 +360,8 @@ voi_default <- function(dat, params){
   results = results %>% filter(level %in% levels)
   
   if(params$add_accept_conditions) {
-    df=dat %>% ungroup %>% select(rowid, cn, p_rooij, p_delta, level, prob) %>% 
-      distinct() %>% group_by(rowid, level) %>%
+    df=dat %>% ungroup %>% select(bn_id, cn, p_rooij, p_delta, level, prob) %>% 
+      distinct() %>% group_by(bn_id, level) %>%
       pivot_longer(cols=c(p_rooij, p_delta), names_to="accept.cond", values_to="val") %>%
       group_by(level, accept.cond, cn) %>% 
       summarize(ev=sum(prob*val), .groups="drop_last") %>% 

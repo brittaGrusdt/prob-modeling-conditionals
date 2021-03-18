@@ -77,7 +77,7 @@ var get_bn = function(cn){
 var state_prior = Infer({model:function(){
   var cn = sample(prior_cns)
   var bn = get_bn(cn)
-  return {bn}
+  return bn
 }})
 
 globalStore.state_prior = state_prior
@@ -85,7 +85,7 @@ globalStore.state_prior = state_prior
 // // Utterances ----------------------------------------------------
 var all_states = state_prior.support()
 var utts_to_remove = filter(function(u){
-  !any(function(s){meaning(u,s["bn"]["table"])}, all_states)
+  !any(function(s){meaning(u,s["table"])}, all_states)
 }, utterances)
 // map(display, utts_to_remove)
 var utterances = filter(function(u){utts_to_remove.indexOf(u) == -1}, utterances)

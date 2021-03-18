@@ -151,8 +151,9 @@ plot_tables <- function(data){
                                          `A-C` = "P(A,¬C)", `AC` = "P(A,C)"))
                  ) +
       labs(title = cn_title, x=xlab, y=ylab) +
-      theme_classic() +
-      theme(legend.position = "none", axis.text.x = element_text(size=10))
+      theme_minimal() +
+      theme(legend.position = "none", axis.text.x = element_text(size=10)) +
+      scale_color_brewer(palette="Dark2")
     plots[[idx]] <- p
     idx <- idx + 1
   }
@@ -165,14 +166,6 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
     select(-table_id) %>% group_by(rowid) %>% 
     pivot_wider(names_from = cell, values_from = val)
   tables.long <- tables.wide %>% 
-    # mutate(`-A-C` = case_when(is.na(`-A-C`) ~ rowSums(select(., starts_with("-A-C_"))),
-    #                           TRUE ~ `-A-C`),
-    #        `-AC` = case_when(is.na(`-AC`) ~ rowSums(select(., starts_with("-AC_"))),
-    #                          TRUE ~ `-AC`), 
-    #        `A-C` = case_when(is.na(`A-C`) ~ rowSums(select(., starts_with("A-C_"))),
-    #                          TRUE ~ `A-C`),
-    #        `AC` = case_when(is.na(`AC`) ~ rowSums(select(., starts_with("AC_"))),
-    #                         TRUE ~ `AC`)) %>% 
     pivot_longer(cols = c(AC, `A-C`, `-AC`, `-A-C`), names_to = "cell",
                  values_to = "val") %>% 
     group_by(bn_id, cn) %>% 
@@ -193,8 +186,9 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
                                               `-AC`= "P(¬A,C)", `-A-C` = "P(¬A,¬C)"))
       ) +
       scale_x_continuous(breaks = scales::pretty_breaks(n = 3)) +
+      scale_fill_brewer(palette = "Dark2") +
       labs(x="probability", y="density") +
-      theme_classic(base_size = 20) +
+      theme_minimal() +
       theme(legend.position = "none") +
       ggtitle(cns[[i]])
     all_plots[[i]] = p
