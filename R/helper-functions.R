@@ -285,30 +285,6 @@ plot_speaker_conditions <- function(data) {
   return(p)
 }
 
-plot_speaker <- function(data, legend_pos="none", facets=TRUE, xlab="", ylab="") {
-  df <- data %>% mutate(p=round(as.numeric(p), 2))
-  if(xlab==""){xlab = TeX("$\\frac{1}{|S|} \\cdot \\sum_{s \\in S} P_S(u|s)$")}
-  if(ylab==""){ylab = "utterance"}
-  
-  if("cn" %in% colnames(df)) {
-    p <- df %>%
-      ggplot(aes(y=utterance, x=p, fill=cn)) +
-      guides(fill=guide_legend(title="causal net"))
-  } else if("speaker_condition" %in% colnames(df)) {
-    p <-  df %>% ggplot(aes(y=utterance, x=p, fill=speaker_condition))
-  } else {
-    p <-  df %>% ggplot(aes(y=utterance, x=p))
-  }
-  p <- p +
-    geom_bar(stat="identity", position=position_dodge(preserve="single"))  +
-    labs(x=xlab, y=ylab) + theme_minimal()
-  if(facets) {p <- p + facet_wrap(~speaker_condition)
-  }
-  p <- p + theme(axis.text.y=element_text(), legend.position=legend_pos) +
-    scale_fill_brewer(palette="Dark2")
-  return(p)
-}
-
 # @arg posterior: in long format, must have columns *cell* and *val*
 voi_default <- function(dat, params){
   df.wide = dat %>% ungroup() %>% dplyr::select(-starts_with("p_")) %>%

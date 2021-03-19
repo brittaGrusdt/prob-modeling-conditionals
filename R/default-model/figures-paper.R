@@ -199,9 +199,9 @@ plot_accept_conditions <- function(dat){
     } 
     return(i-1)
   }
-  
-  data <- dat %>% group_by(rowid, level, condition) %>%
+  data <- dat %>% rowid_to_column("idx") %>% group_by(idx) %>% 
     mutate(group = getGroup(val))
+    # group_by(rowid, level, condition) %>%
   data.sum <- data %>% group_by(level, condition, group, cn) %>% 
     summarise(count=n(), .groups="drop_last") %>%
     group_by(level, condition) %>%
@@ -225,35 +225,29 @@ plot_accept_conditions <- function(dat){
 params.prior <- read_rds(paste(data_dir, "params-none-priorN.rds", sep=SEP))
 prior <-  read_rds(params.prior$target) %>%
   pivot_wider(names_from = "cell", values_from = "val") %>% 
-  mutate(level = "prior") %>% select(-bias)
-params.sp_literal <- read_rds(paste(data_dir, "params-speaker-literal.rds", sep=SEP))
+  mutate(level = "prior") %>% select(-bias) %>%
+  pivot_longer(cols=c(p_delta, p_rooij, p_diff),names_to="condition", values_to = "val")
 
 # get data from implemented literal speaker (conditioned s.t. A > C is true)
-speaker.literal <- read_rds(file.path(params$target_dir, params$target_fn)) %>%
+params.sp_literal <- read_rds(paste(data_dir, "params-speaker-literal.rds", sep=SEP))
+
+speaker.literal <- read_rds(file.path(params$target_dir, params.sp_literal$target_fn)) %>%
   select(-bias) %>%
   mutate(utterance = paste("utt", utterance, sep="_"),
          level="literal-speaker") %>% 
-  pivot_wider(names_from = utterance, values_from=probs)
+  group_by(rowid) %>% 
+  mutate(p_best=max(probs), u_best = probs == p_best) %>%
+  pivot_longer(cols=c(p_delta, p_rooij, p_diff),names_to="condition", values_to = "val")
 
-speaker.literal.best = speaker.literal %>% group_by(rowid) %>% 
-  pivot_longer(cols = starts_with("utt_"), names_to = "utterance",
-             values_to = "probs") %>%
-  group_by(bn_id, level, cn) %>% 
-  mutate(p_best=max(probs), u_best = probs == max(probs)) %>% 
-  group_by(bn_id, level, cn, rowid) %>% 
+# pragmatic speaker condition: best utterance is A > C
+speaker.literal.best = speaker.literal %>%
   filter(u_best) %>% dplyr::select(-p_best, -u_best)
-
-# best utterance is A > C
 speaker.pragmatic <- speaker.literal.best %>%
   filter(utterance == "utt_A > C") %>% 
-  mutate(level = "pragmatic-speaker") %>%
-  group_by(rowid)
-
-speakers = bind_rows(speaker.literal, speaker.pragmatic) %>% 
-  select(-starts_with("utt"))
+  mutate(level = "pragmatic-speaker")
+  
+speakers = bind_rows(speaker.literal, speaker.pragmatic) %>% group_by(rowid,level)
 df <- bind_rows(prior, speakers) %>%
-  group_by(rowid, level) %>%
-  pivot_longer(cols=c(p_delta, p_rooij, p_diff), names_to="condition", values_to = "val") %>% 
   mutate(
     level=factor(level, levels = c("prior", "literal-speaker", "pragmatic-speaker")), 
     cn = case_when(cn == "A || C" ~ "A,C indep.",
@@ -267,14 +261,12 @@ p = plot_accept_conditions(df %>% filter(condition == "p_rooij"))
 ggsave(paste(params$plot_dir, "accept-conditions.png", sep=SEP), p, width=10, height=4)
 
 # -------------- additional checks on tables of pragmatic speaker condition
-speaker.pragmatic.long = speaker.pragmatic %>% 
-   pivot_longer(cols=starts_with("utt_"), names_to="utterance", values_to="probs")
- 
-prag.ind= speaker.pragmatic.long %>% filter(cn=="A || C" & probs>0) 
+prag.ind= speaker.pragmatic %>% filter(cn=="A || C" & probs>0) 
 # analyze prior given tables where no literal no conjunction is true
 prior = readRDS(params$target) %>% filter(level=="prior") %>%
   pivot_wider(names_from="cell", values_from="val")
 
+# A->C is applicable and neither conj nor literal true
 prior.unc = prior %>%
   mutate(conj=AC>theta | `A-C`>theta | `-AC`>theta | `-A-C`>theta,
          lit=(AC+`A-C` > theta) | (AC+`-AC`>theta) |
@@ -282,21 +274,21 @@ prior.unc = prior %>%
   filter(!conj &!lit) %>% ungroup() %>%
   filter(AC/(AC+`A-C`) > theta)
 
-ids = prior.unc %>% filter(cn=="A || C") %>% pull(bn.id)
-ratio = nrow(prag.ind) / nrow(prag.ind %>% filter(stimulus_id %in% ids))
-print(paste(ratio, 'cant say conjunction or literal'))
+ids = prior.unc %>% filter(cn=="A || C") %>% pull(bn_id)
+ratio = nrow(prag.ind %>% filter(bn_id %in% ids)) / nrow(prag.ind)
+print(paste("in", ratio*100, '% of cases, neither conjunction nor literal applicable'))
 
-speaker.pragmatic %>% filter(p_rooij>0.9) %>% pull(n_sampled) %>% sum() /
-  speaker.pragmatic %>% pull(n_sampled) %>% sum()
-speaker.literal %>% filter(p_rooij<0) %>% pull(n_sampled) %>% sum() /
-  speaker.literal %>% pull(n_sampled) %>% sum()
+# some checks
+speaker.pragmatic %>% filter(condition=="p_rooij" & val >0.9) %>% nrow() /
+  (speaker.pragmatic %>% filter(condition=="p_rooij") %>% nrow())
+speaker.literal %>% filter(condition=="p_rooij" & val<0) %>% nrow() /
+  (speaker.literal %>% filter(condition=="p_rooij") %>% nrow())
 
-prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / prior  %>% nrow()
-prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / prior  %>% nrow()
-
+prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / (prior  %>% nrow())
+prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / (prior  %>% nrow())
 
 # Check almost true states Appendix
-df= speaker.pragmatic %>% filter(cn=="A || C") %>% select(-starts_with("utt_")) %>% 
+df= speaker.pragmatic %>% filter(cn=="A || C") %>% select(-utterance) %>% 
   ungroup()
 df.lit = df %>% group_by(bn_id) %>% 
   mutate(pa=`AC`+`A-C`, pc=`AC`+`-AC`, pna=`-AC`+`-A-C`, pnc=`A-C`+`-A-C`) %>%
@@ -308,29 +300,27 @@ df.almost_true = df.lit %>% filter(val>=0.85)
 
 
 # Figure 7 ----------------------------------------------------------------
-
-# speaker p_rooij filtered from literal speaker condition
-speaker.p_rooij.best.from_lit = speaker.literal %>% filter(p_rooij>0.9) %>% 
-  group_by(stimulus_id, cn) %>%
-  pivot_longer(cols=starts_with("utt_"), names_prefix="utt_", names_to="utterance", values_to="probs") %>%
-  mutate(p_best=max(probs), u_best=list(utterance[probs == max(probs)])) %>%
-  unnest(u_best) %>% select(-p_best)
-
-# frequency utterance type is the speaker's best utterance
-# GIVEN A > C is NOT the speaker's best utterance
-df <- speaker.p_rooij.best.from_lit %>%
-  filter(utterance == u_best) %>% select(-u_best) %>%
-  filter(utterance != "A > C") %>%
+# speaker results for states from literal speaker condition filtered s.t.
+# p_rooij>0.9 and the speaker's best utterance is NOT A->C
+df.sp = speaker.literal %>%
+  filter(condition=="p_rooij" & val > 0.9 & u_best) %>%
+  filter(utterance != "utt_A > C") %>%
+  select(-p_best, -u_best) %>%
+  mutate(utterance = str_replace(utterance, "utt_", "")) %>% 
   chunk_utterances(c("-C > -A", "-A > -C", "C > A"))
 
-df.sum <- df %>% group_by(utterance, cn) %>%
-  summarise(p=sum(n_sampled), .groups = "drop_last") %>% arrange(p) %>% 
-  mutate(N=sum(p), p=p/N)
-
-p = plot_speaker(df.sum, "bottom", facets=FALSE, xlab="proportion",
-                 ylab="best utterance")
+# frequency of each utterance type for these states
+df.sum <- df.sp %>% group_by(utterance, cn) %>%
+  summarise(count=n(), .groups = "drop_last") %>%
+  mutate(freq=count/sum(count), count.utt=sum(count)) %>% ungroup() %>%
+  mutate(N=sum(count), freq.utt=count.utt/sum(count))
+p <- df.sum %>%
+    ggplot(aes(y=utterance, x=count, fill=cn)) +
+    geom_bar(stat="identity", position=position_stack())  +
+    labs(x="count", y="best utterance") + theme_minimal() +
+    theme(axis.text.y=element_text(), legend.position="top") +
+    scale_fill_brewer(palette="Dark2")
 
 ggsave(paste(params.speaker$plot_dir,
              "literal-speaker_prooij_large_freq_best_not_ac.png",
-             sep=SEP), p, width=13.5, height=4.5)
-
+             sep=SEP), p, width=5, height=2)
