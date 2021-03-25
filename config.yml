@@ -23,8 +23,8 @@ targets_paper_config:
 
 ## 1. bias configurations ##
 bias_none:
-  target_fn: "results-none.rds"
-  target_params: "params-none.rds"
+  target_fn: "results-none"
+  target_params: "params-none"
   utts_fn: "utterances-none.rds"
   vars: !expr c("A", "C")
   cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
@@ -34,8 +34,8 @@ bias_none:
   tables_fn: "tables-default.rds"
   
 bias_biscuits:
-  target_fn: "results-biscuits.rds"
-  target_params: "params-biscuits.rds"
+  target_fn: "results-biscuits"
+  target_params: "params-biscuits"
   utts_fn: "utterances-biscuits.rds"
   vars: !expr c("A", "C")
   cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
@@ -53,8 +53,8 @@ log_likelihood:
 bias_lawn:
   bias: "lawn"
   target_dir: "./data/special-conditionals"
-  target_fn: "results-lawn.rds"
-  target_params: "params-lawn.rds"
+  target_fn: "results-lawn"
+  target_params: "params-lawn"
   utts_fn: "utterances-lawn.rds"
   vars: !expr c("A", "C")
   cns: !expr c("A implies C", "C implies A","A implies -C", "C implies -A", "A || C")
@@ -118,8 +118,7 @@ garden_party:
 speaker:
   level_max: "speaker"
   utt: ""
-  target_fn: "results-speaker.rds"
-  target_params: "params-speaker.rds"
+  fn_suffix: "speaker"
   n_samples: 20000 # bns sampled from prior
 
 
@@ -129,53 +128,47 @@ speaker:
 speaker_literal:
   level_max: "speaker"
   utt: "A > C" #condition s.t. only states where utt is true are considered
-  target_fn: "results-speaker-literal.rds"
-  target_params: "params-speaker-literal.rds"
   n_samples: 20000 # bns sampled from prior
+  fn_suffix: "speaker-literal"
 
 speaker_p_rooij:
   level_max: "speaker"
   utt: "p_rooij"
-  target_fn: "results-speaker-p_rooij-large.rds"
-  target_params: "params-speaker-p_rooij-large.rds"
+  fn_suffix: "speaker-p_rooij-large"
   n_samples: 20000 # bns sampled from prior
 
 speaker_c:
   inherits: speaker
-  target_fn: "results_speaker_given_C.rds"
-  target_params: "params-speaker-given-C.rds"
+  fn_suffix: "speaker-given-C"
   utt: "C"
 # not-conj, when utt=C, but neither A and C nor -A and C are true (in webppl)!
 
 # speaker only sees states where she is un/certain about A and about C
 speaker_uncertain:
   inherits: speaker
-  target_fn: "results-speaker-uncertain.rds"
-  target_params: "params-speaker-uncertain.rds"
+  fn_suffix: "speaker-uncertain"
   utt: "uncertainAandC"
 
 speaker_certain:
   inherits: speaker
-  target_fn: "results-speaker-certain.rds"
-  target_params: "params-speaker-certain.rds"
+  fn_suff: "speaker-certain"
   utt: "certainAandC"
 
 prior:
   level_max: "prior"
   utt: ""
+  fn_suffix: "prior"
 
 priorN:
   inherits: bias_none
-  target_fn: "results-none-priorN.rds"
-  target_params: "params-none-priorN.rds"
   level_max: "priorN"
   utt: ""
   n_samples: 20000
+  fn_suffix: "priorN"
   
 priorConditioned:
   inherits: bias_none
-  target_fn: "results-none-prior_conditioned.rds"
-  target_params: "params-none-prior_conditioned.rds"
+  fn_suffix: "prior-conditioned"
   level_max: "prior_conditioned"
   utt: "certainAandC"
   n_samples: 20000
@@ -183,10 +176,12 @@ priorConditioned:
 ll:
   level_max: "LL"
   utt: "A > C"
+  fn_suffix: "prior-ll"
 
 pl:
   level_max: "PL"
   utt: "A > C"
+  fn_suffix: "prior-ll-pl"
 
 # there needs to be 1 blank final line!
 

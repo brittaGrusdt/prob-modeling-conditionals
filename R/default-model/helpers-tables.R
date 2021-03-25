@@ -205,7 +205,7 @@ analyze_tables <- function(params){
   theta = params$theta
   prior = readRDS(params$target) %>% filter(level=="prior") %>%
     pivot_wider(names_from="cell", values_from="val") %>% ungroup() %>% 
-    select(prob, bn.id) %>% rename(bn_id=bn.id)
+    dplyr::select(prob, bn_id)
   tables <- read_rds(params$tables_path) %>% ungroup() %>% 
       select(bn_id, cn.orig, cn, vs, ps) %>% group_by(bn_id, cn) %>% unnest(c(ps, vs))
   tables = left_join(tables, prior, by=c("bn_id"))

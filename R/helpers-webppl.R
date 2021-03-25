@@ -70,7 +70,7 @@ structure_listener_data <- function(posterior, params, tbls.map=NA){
   } 
 
   if(params$save){
-    df %>% save_data(paste(params$target_dir, params$target_fn, sep= .Platform$file.sep))
+    df %>% save_data(params$target)
     params %>% save_data(params$target_params)
   }
   return(df)

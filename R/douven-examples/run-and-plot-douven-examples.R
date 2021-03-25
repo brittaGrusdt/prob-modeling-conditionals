@@ -98,9 +98,11 @@ plot_douven_cases <- function(data){
       name = "",
       limits = c("trust", "PL", "LL", "prior"),
       labels = c(
-        paste(strwrap("Listener's beliefs", width=20), collapse="\n"),
-        paste(strwrap("Pragmatic interpretation", width=20), collapse="\n"),
-        paste(strwrap("Literal interpretation", width=20), collapse="\n"),
+        paste(strwrap("Pragmatic interpretation with listener's observation",
+                      width=28), collapse="\n"),
+        paste(strwrap("Pragmatic interpretation w/o listener's observation",
+                      width=28), collapse="\n"),
+        paste(strwrap("Literal interpretation", width=28), collapse="\n"),
         "Prior Belief"
       )) +
     scale_fill_brewer(palette="Dark2",
@@ -109,13 +111,14 @@ plot_douven_cases <- function(data){
                       labels = df$labels
                      ) +
     labs(x="Expected value", title="") +
-    theme_bw() + theme(legend.position="top")
+    theme_bw() + theme(legend.position="top", axis.text = element_text(size=14))
 
   return(p)
 }
 
 for(ex in c("gardenParty", "sundowners", "skiing")) {
   p <- douven.data %>% filter(example == !!(ex)) %>% plot_douven_cases()
-  ggsave(here("data", "douven-examples", paste(ex, ".png", sep="")), p, width=6, height=4)
+  ggsave(here("data", "douven-examples", paste(ex, ".png", sep="")), p,
+         width=7, height=4, dpi="print")
 }
 message(paste('saved plots to', here("data", "douven-examples")))

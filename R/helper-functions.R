@@ -347,9 +347,7 @@ voi_default <- function(dat, params){
   
   if(params$save){
     results %>%
-      save_data(paste(params$target_dir, .Platform$file.sep,
-                      str_split(params$target_fn, "\\.")[[1]][1],
-                      "-prior-LL-PL-vois.rds", sep=""))
+      save_data(paste(str_replace(params$target, ".rds", "-vois.rds"), sep=""))
   }
   return(results)
 }

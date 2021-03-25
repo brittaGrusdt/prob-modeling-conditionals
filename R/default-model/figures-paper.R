@@ -181,8 +181,8 @@ plot_accept_conditions <- function(dat){
                 seq(from=0.75, by=0.05, to=1))
   x_breaks <- seq(from=0.5, by=1, length.out=length(x_labels))
   level_labels = as_labeller(
-    c(`literal-speaker` = paste(strwrap("Literal speaker", width=15), collapse="\n"),
-      `pragmatic-speaker` = paste(strwrap("Pragmatic speaker", width=15), collapse="\n"),
+    c(`literal-speaker` = paste(strwrap("Literal speaker", width=25), collapse="\n"),
+      `pragmatic-speaker` = paste(strwrap("Pragmatic speaker", width=25), collapse="\n"),
       `prior` = "Prior")
   )
   condition_labels = as_labeller(c(`p_rooij`= "△*P",
@@ -315,6 +315,8 @@ df.sum <- df.sp %>% group_by(utterance, cn) %>%
   mutate(freq=count/sum(count), count.utt=sum(count)) %>% ungroup() %>%
   mutate(N=sum(count), freq.utt=count.utt/sum(count))
 p <- df.sum %>%
+    mutate(cn=case_when(cn=="A || C" ~ "A,C indep.", T ~ cn),
+           cn=factor(cn, levels=c("A,C indep.", "A implies C", "C implies A"))) %>% 
     ggplot(aes(y=utterance, x=count, fill=cn)) +
     geom_bar(stat="identity", position=position_stack())  +
     labs(x="count", y="best utterance") + theme_minimal() +
@@ -324,3 +326,30 @@ p <- df.sum %>%
 ggsave(paste(params.speaker$plot_dir,
              "literal-speaker_prooij_large_freq_best_not_ac.png",
              sep=SEP), p, width=5, height=2)
+
+
+# Fig listener surprisal ml -----------------------------------------------
+data.speaker <- read_rds(params.speaker$target) %>% select(-level, -bias) %>%
+  select(-starts_with("p_"))
+sp.ind = data.speaker %>% filter(cn == "A || C")
+
+freqs.best.utts = data.speaker %>% group_by(rowid) %>%
+  mutate(best=probs==max(probs)) %>%
+  filter(best) %>%  group_by(utterance, cn) %>% 
+  chunk_utterances() %>% mutate(cn=case_when(cn=="A || C" ~ "A,C indep.",
+                                             T ~ "A,C dep.")) %>% 
+  summarize(freq=n()) %>% 
+  arrange(freq) 
+
+p = freqs.best.utts %>% ggplot(aes(x=utterance, y=freq, fill=cn)) +
+  geom_bar(stat="identity") + theme_minimal() +
+  theme(legend.position="top") +
+  labs(y="frequency", x="best utterance") +
+  scale_fill_brewer(name="causal net", palette="Dark2")
+
+ggsave(paste(params.speaker$plot_dir,
+             "listener-surprisal-speakers-utt-choice.png",
+             sep=SEP), p, width=5, height=2)
+
+
+

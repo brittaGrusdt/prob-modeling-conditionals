@@ -3,34 +3,45 @@ source("R/helpers-webppl.R")
 source("R/helper-functions.R")
 library(rwebppl)
 library(tidyverse)
+fs = .Platform$file.sep
 
-# target="targets_paper_config"
-target="targets_my_config"
+target="targets_paper_config"
+# target="targets_my_config"
 
-# params <- configure(c("bias_biscuits", "pl", target))
 # params <- configure(c("bias_none", "pl", target))
 params <- configure(c("bias_none", "speaker", target))
 # params <- configure(c("bias_none", "speaker_literal", target))
 # params <- configure(c("bias_none", "speaker_p_rooij", target))
+# params <- configure(c("bias_none", "speaker_p_rooij_ifac_applicable", target))
 # params <- configure(c("bias_none", "speaker_uncertain", target))
 # params <- configure(c("bias_none", "speaker_certain", target))
 # params <- configure(c("priorN", target))
 # params <- configure(c("priorConditioned", target))
+# params <- configure(c("bias_biscuits", "pl", target))
+# params <- configure(c("bias_biscuits", "speaker", target))
 
 # Setup -------------------------------------------------------------------
-dir.create(params$target_dir, recursive = TRUE)
-params$target <- file.path(params$target_dir, params$target_fn, fsep=.Platform$file.sep)
-params$target_params <- file.path(params$target_dir, params$target_params, fsep=.Platform$file.sep)
-params$utts_path <- file.path(params$target_dir, params$utts_fn, fsep = .Platform$file.sep)
+if(!dir.exists(params$target_dir)) dir.create(params$target_dir, recursive = TRUE)
+params$target <- file.path(
+  params$target_dir, paste(params$target_fn, "-", params$fn_suffix, ".rds", sep=""),
+  fsep=fs
+)
+params$target_params <- str_replace(params$target, "results", "params")
+params$utts_path <- file.path(params$target_dir, params$utts_fn, fsep=fs)
+
+params$plot_dir = paste(params$target_dir, "figs", sep=fs)
+if(!dir.exists(params$plot_dir)) dir.create(params$plot_dir)
 
 ##---- Generate/Retrieve tables ----##
 if(!"tables_path" %in% names(params)){
-  params$tables_path <- paste(params$target_dir, params$tables_fn, sep=.Platform$file.sep)
+  params$tables_path <- paste(params$target_dir, params$tables_fn, sep=fs)
 }
+# params$seed_tables <- 0907
+# params$seed_webppl <- 12345
 tables <- create_tables(params)
+# tables = readRDS(params$tables_path)
 tbls.map = tables %>% select(bn_id, cn.orig)
 
-# tables = readRDS(params$tables_path)
 params$tables = tables %>% ungroup %>%
   dplyr::select(bn_id, cn, ps, vs, ll) %>% group_by(bn_id)
 
@@ -53,20 +64,11 @@ params$utterances <- utterances
 posterior <- run_webppl(params$model_path, params)
 
 # structure + save data
-params$target <- file.path(paste(params$target_dir, params$target_fn, sep=.Platform$file.sep))
-params$target_params <- str_replace(params$target, "results", "params")
-params$plot_dir = paste(params$target_dir, "figs", sep=.Platform$file.sep)
-if(!dir.exists(params$plot_dir)){
-  dir.create(params$plot_dir)
-}
-
-# restructure data and save
 if(params$level_max == "speaker") {
   speaker <- posterior$distributions %>%
     structure_speaker_data(params, tbls.map)
   save_data(posterior$all_ids %>% rename(bn_id=value),
-            paste(params$target_dir, .Platform$file.sep,
-                  "sample-ids-", params$target_fn, sep=""))
+            str_replace(params$target, "results", "sample-ids"))
   speaker_avg <- speaker %>% average_speaker(params)
   speaker_avg %>% arrange(desc(avg))
 } else if(params$level_max %in% c("priorN", "prior_conditioned")){
