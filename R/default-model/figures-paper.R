@@ -13,10 +13,10 @@ data_dir = here("data", "default-model", "paper-config")
 
 plot_dir = paste(data_dir, "figs", sep=SEP)
 if(!dir.exists(plot_dir)) dir.create(plot_dir)
-params <- read_rds(paste(data_dir, "params-none.rds", sep=SEP))
+params <- read_rds(paste(data_dir, "params-none-prior-ll-pl.rds", sep=SEP))
 theta=params$theta
 
-params.speaker <- read_rds(paste(data_dir, "params-speaker.rds", sep=SEP))
+params.speaker <- read_rds(paste(data_dir, "params-none-speaker.rds", sep=SEP))
 UTTERANCES <- read_rds(paste(params.speaker$target_dir, params.speaker$utts_fn, sep=SEP))
 
 # Figure 2 ----------------------------------------------------------------
