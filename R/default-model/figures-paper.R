@@ -351,5 +351,28 @@ ggsave(paste(params.speaker$plot_dir,
              "listener-surprisal-speakers-utt-choice.png",
              sep=SEP), p, width=5, height=2)
 
+# independent states from listener's perspective
+freqs.best.utts %>% filter(cn=="A,C indep.") %>%
+  ungroup() %>% mutate(n=sum(freq), rel_freq=round(freq/n, 2))
+
+df = data.speaker %>% chunk_utterances() %>%
+  mutate(cn=case_when(cn=="A || C" ~ "A,C indep.",
+                      T ~ "A,C dep.")) %>%
+  group_by(cn, utterance,rowid) %>%
+  summarize(probs=sum(probs), .groups = "drop_last") %>% 
+  summarize(p=mean(probs), .groups="drop_last")
+
+p = df %>% filter(cn=="A,C indep.") %>%
+  mutate(utterance=factor(utterance, levels = c("literal", "likely + literal",
+                                                "conjunction", "conditional"))) %>% 
+  ggplot(aes(x=utterance, y=p)) +
+  geom_bar(stat="identity") + theme_minimal() +
+  labs(y=str_wrap("average probability across set of 9600 independent Bayes nets",
+                  width=25),
+             x="utterance type")
+
+ggsave(paste(params.speaker$plot_dir,
+             "listener-surprisal-speakers-utt-choice.png",
+             sep=SEP), p, width=5, height=2)
 
 
