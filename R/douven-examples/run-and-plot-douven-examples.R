@@ -86,11 +86,13 @@ plot_douven_cases <- function(data){
                "D || G>-S", expression(paste("D, G indep.,",G %->%"","¬S")), "gardenParty", 
                "D>G>-S", expression(paste(D %->% G %->%"", "¬S")), "gardenParty")
   ex.in = data$example %>% unique()
+  max.x = round(data$ev %>% max(), 1)
   df = df %>% filter(example %in% ex.in)
   p <- data %>% mutate(level=as.factor(level)) %>%
     ggplot() +
-    geom_bar(mapping = aes(y=level, x=ev, fill=cn), stat="identity", position="stack") +
-    facet_wrap(~example) + 
+    geom_bar(mapping = aes(y=level, x=ev, fill=cn), stat="identity",
+             position="stack") +
+    # facet_wrap(~example) + 
     facet_wrap(~marginal, labeller=
                  as_labeller(c(`r`="Sundowners: P(R)", `rs`="Sundowners: P(R,S)",
                                `e`="Skiing: P(E)", `d`="Garden Party: P(D)"))) +
@@ -110,8 +112,12 @@ plot_douven_cases <- function(data){
                       limits = df$limits,
                       labels = df$labels
                      ) +
+    scale_x_continuous(breaks = seq(0, max.x, by=0.1)) +
     labs(x="Expected value", title="") +
-    theme_bw() + theme(legend.position="top", axis.text = element_text(size=14))
+    theme_minimal() +
+    theme(legend.position="top",
+          panel.spacing = unit(2, "lines"), axis.text = element_text(size=14),
+          axis.text.y = element_text(hjust = 0))
 
   return(p)
 }
