@@ -9,16 +9,13 @@ target="targets_paper_config"
 # target="targets_my_config"
 
 # params <- configure(c("bias_none", "pl", target))
-params <- configure(c("bias_none", "speaker", target))
+# params <- configure(c("bias_none", "speaker", target))
 # params <- configure(c("bias_none", "speaker_literal", target))
 # params <- configure(c("bias_none", "speaker_p_rooij", target))
-# params <- configure(c("bias_none", "speaker_p_rooij_ifac_applicable", target))
+##params <- configure(c("bias_none", "speaker_p_rooij_ifac_applicable", target))
 # params <- configure(c("bias_none", "speaker_uncertain", target))
-# params <- configure(c("bias_none", "speaker_certain", target))
+params <- configure(c("bias_none", "speaker_certain", target))
 # params <- configure(c("priorN", target))
-# params <- configure(c("priorConditioned", target))
-# params <- configure(c("bias_biscuits", "pl", target))
-# params <- configure(c("bias_biscuits", "speaker", target))
 
 # Setup -------------------------------------------------------------------
 if(!dir.exists(params$target_dir)) dir.create(params$target_dir, recursive = TRUE)

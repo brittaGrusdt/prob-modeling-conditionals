@@ -275,7 +275,6 @@ plot_speaker_conditions <- function(data) {
   p <- df %>%
     ggplot(aes(y=utterance, x=p, fill=cn)) +
     guides(fill=guide_legend(title="causal net")) +
-    # p <-  df %>% ggplot(aes(y=utterance, x=p, fill=speaker_condition))
     geom_bar(stat="identity", position=position_dodge())  +
     labs(x="proportion", y="best utterance") + theme_minimal() +
     facet_wrap(~speaker_condition) +

@@ -176,6 +176,8 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
            cn=as.factor(cn))
   all_plots = list()
   cns <- list(c("A,C independent"), c("A implies ¬C"), c("A implies C"))
+  cns.expr <- list(c("A,C independent"), c(expression(paste(A %->%"", "¬C"))),
+                   c(expression(A %->% C)))
   cns.short <- c("indep", "anc", "ac")
   for(i in seq(1,3)) {
     p <- tables.long %>% filter(cn %in% cns[[i]]) %>%
@@ -190,7 +192,7 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
       labs(x="probability", y="density") +
       theme_minimal() +
       theme(legend.position = "none") +
-      ggtitle(cns[[i]])
+      ggtitle(cns.expr[[i]])
     all_plots[[i]] = p
     
     save_to = paste(plot_dir, paste("tables-", cns.short[[i]], ".png", sep=""), sep=SEP)

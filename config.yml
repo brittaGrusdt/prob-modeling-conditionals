@@ -151,7 +151,7 @@ speaker_uncertain:
 
 speaker_certain:
   inherits: speaker
-  fn_suff: "speaker-certain"
+  fn_suffix: "speaker-certain"
   utt: "certainAandC"
 
 prior:

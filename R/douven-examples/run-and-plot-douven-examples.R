@@ -116,8 +116,11 @@ plot_douven_cases <- function(data){
     labs(x="Expected value", title="") +
     theme_minimal() +
     theme(legend.position="top",
-          panel.spacing = unit(2, "lines"), axis.text = element_text(size=14),
-          axis.text.y = element_text(hjust = 0))
+          panel.spacing = unit(2, "lines"), 
+          axis.text = element_text(size=12),
+          legend.key.size = unit(0.75,"line"),
+          axis.text.y = element_text(hjust = 0, size=12),
+          legend.text = element_text(size=12))
 
   return(p)
 }
