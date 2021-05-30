@@ -33,8 +33,6 @@ if(!dir.exists(params$plot_dir)) dir.create(params$plot_dir)
 if(!"tables_path" %in% names(params)){
   params$tables_path <- paste(params$target_dir, params$tables_fn, sep=fs)
 }
-# params$seed_tables <- 0907
-# params$seed_webppl <- 12345
 tables <- create_tables(params)
 # tables = readRDS(params$tables_path)
 tbls.map = tables %>% select(bn_id, cn.orig)
