@@ -249,7 +249,7 @@ plot_accept_conditions <- function(dat){
   return(p)
 }
 p = plot_accept_conditions(df %>% filter(condition == "p_rooij"))
-ggsave(paste(params$plot_dir, "accept-conditions.png", sep=SEP), p, width=7, height=2.5)
+ggsave(paste(params$plot_dir, "accept-conditions.png", sep=SEP), p, width=7, height=3)
 
 # -------------- additional checks on tables of pragmatic speaker condition
 prag.ind= speaker.pragmatic %>% filter(cn=="A || C" & probs>0) 
