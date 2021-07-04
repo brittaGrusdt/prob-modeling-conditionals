@@ -40,12 +40,6 @@ for(i in seq(1,4)){
   if(!dir.exists(params$plot_dir)) dir.create(params$plot_dir)
   
   ##---- Generate/Retrieve utterances ----##
-  generate_utts <- function(params){
-    utterances <- run_webppl("./model/default-model/utterances.wppl", params)
-    utterances <- utterances %>% map(function(x){x %>% pull(value)}) %>% unlist()
-    if(params$save) utterances %>% save_data(params$utts_path)
-    return(utterances)
-  }
   if(!file.exists(params$utts_path)){
     utterances <- generate_utts(params)
   } else {

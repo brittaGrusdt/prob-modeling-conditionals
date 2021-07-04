@@ -1,6 +1,3 @@
-EPSILON = 0.0000001
-SEP = .Platform$file.sep
-
 save_data <- function(data, target_path){
   data %>% write_rds(target_path)
   print(paste("saved to:", target_path))
@@ -21,31 +18,14 @@ filter_vars <- function(df_long, vars){
   return(df)
 }
 
-
 # Utterances --------------------------------------------------------------
-sort_utterances <- function(utterances){
-  literals <- c("A", "C", "-A", "-C")
-  conjs <- c("C and A", "-C and A", "C and -A", "-C and -A")
-  likely <- c("likely A", "likely C", "likely -A", "likely -C")
-  ifs <- c("A > C", "A > -C", "-A > C", "-A > -C",
-           "C > A", "C > -A", "-C > A", "-C > -A")
-  return(utterances[order(match(utterances, c(conjs, literals, ifs, likely)))])
-}
-
-add_pspeaker_max_conj_lit <- function(df){
-  df <- df %>% mutate(pmax_conj_lit =
-                        max(A, `-A`, C, `-C`,
-                            `C and A`, `C and -A`, `-C and A`,`-C and -A`))
-  return(df)
-}
-
 generate_utts <- function(params){
   utterances <- run_webppl(
     here("model", "default-model", "utterances.wppl", sep=.Platform$file.sep),
     params
   )
   utterances <- utterances %>% map(function(x){x %>% pull(value)}) %>% unlist()
-  utterances %>% save_data(params$utts_path)
+  if(params$save) utterances %>% save_data(params$utts_path)
   return(utterances)
 }
 
@@ -130,9 +110,6 @@ table_to_utts = function(tables, theta){
   return(tbls)
 }
 
-
-
-
 # Probabilities -----------------------------------------------------------
 #@arg vars: list of variables, if more than one, only states where all hold
 # are retained
@@ -212,82 +189,7 @@ add_probs <- function(df){
   return(df)
 }
 
-# model ------------------------------------------------------------------
-add_model_params <- function(df, params){
-  df <- df %>% mutate(cost=params$cost_conditional,
-                      alpha=params$alpha,
-                      bias=params$bias,
-                      value=as.character(value))
-  return(df)
-}
-
-filter_by_model_params <- function(df, params){
-  df <- df %>% filter(cost==params$cost_conditional &
-                      alpha==params$alpha)
-  return(df)
-}
-
-# ** computes likelihood for independent net and  A->C / C->A for if**
-likelihood <- function(df_wide, sigma_indep){
-  # prepare
-  df <- df_wide %>%
-    compute_cond_prob("P(C|A)") %>% rename(p_c_given_a=p) %>% 
-    compute_cond_prob("P(C|-A)") %>% rename(p_c_given_na=p) %>% 
-    compute_cond_prob("P(A|C)") %>% rename(p_a_given_c=p) %>% 
-    compute_cond_prob("P(A|-C)") %>% rename(p_a_given_nc=p) %>%
-    mutate(pa=AC+`A-C`, pc=AC+`-AC`,
-           ind.lower=case_when(1-(pa+pc) < 0 ~ abs(1-(pa+pc)),
-                               TRUE ~ 0),
-           ind.upper=pmin(pa, pc))
-  
-  df <- df %>% 
-    mutate(
-        p_nc_given_a = 1 - p_c_given_a,
-        p_na_given_c = 1 - p_a_given_c,
-        p_nc_given_na = 1 - p_c_given_na,
-        p_na_given_nc = 1 - p_a_given_nc,
-        
-        logL_ind=log(dtruncnorm(x=`AC`, a=ind.lower, b=ind.upper, mean=pa*pc, sd=sigma_indep)),
-        logL_if_ac = log(dbeta(p_c_given_a, 10, 1))+log(dbeta(p_c_given_na, 1, 10)),
-        logL_if_anc = log(dbeta(p_nc_given_a, 10, 1)) + log(dbeta(p_nc_given_na, 1, 10)),
-        logL_if_ca = log(dbeta(p_a_given_c, 10, 1)) + log(dbeta(p_a_given_nc, 1, 10)),
-        logL_if_cna = log(dbeta(p_na_given_c, 10, 1)) + log(dbeta(p_na_given_nc, 1, 10))
-    ) %>% 
-    select(-p_c_given_na, -p_c_given_a, -p_a_given_c, -p_a_given_nc, -pa, -pc,
-           -p_nc_given_a, -p_na_given_c, -p_nc_given_na, -p_na_given_nc)
-  return(df)
-}
-
 # other functions ---------------------------------------------------------
-hellinger <- function(p, q){
-  (1/sqrt(2)) * sqrt(sum((sqrt(p)-sqrt(q))^2))
-}
-
-adapt_bn_ids <- function(data_wide){
-  # only considers levels PL, LL and prior
-  df <- data_wide %>% dplyr::select(-prob, -level, -bn_id, -cn)
-  cell_names <- names(df)
-  data_wide <- data_wide %>% unite(cells, names(df), sep="__")
-  
-  # makes sure that bn_ids are identical across levels PL/LL/prior
-  prior <- data_wide %>% filter(level=="prior") %>% arrange(cn, cells)
-  ll <- data_wide %>% filter(level=="LL") %>% arrange(cn, cells)
-  pl <- data_wide %>% filter(level=="PL") %>% arrange(cn, cells)
-  df <- bind_rows(ll, prior)
-  
-  # not all Bayes nets that are in the prior also occur in the literal/pragmatic listener
-  # (but there is no diff btw. those in LL/PL)
-  idx_dups <- df %>% dplyr::select(-level, -prob, -bn_id) %>% duplicated()
-  duplicates_prior <- df[idx_dups, ] %>%  arrange(cn, cells)
-  # duplicates_prior$level %>% unique()
-  
-  pl <- pl %>% mutate(bn_id=duplicates_prior$bn_id)
-  ll <- ll %>% mutate(bn_id=duplicates_prior$bn_id)
-  
-  df <- bind_rows(prior, ll, pl)
-  df <- df %>% separate(cells, cell_names, sep="__", convert=TRUE) 
-  return(df)
-}
 
 #@arg config_keys: order in config_keys is important since same key values
 # are overwritten!
@@ -306,16 +208,6 @@ configure <- function(config_keys) {
 }
 
 # plotting functions ------------------------------------------------------
-plot_evs <- function(data){
-  p <- data %>% ggplot() +
-    geom_bar(mapping = aes(x=level, y=ev, fill=level), stat="identity", position="dodge") +
-    labs(x="", y="", title="") +
-    coord_flip() +
-    theme_classic(base_size = 20) +
-    theme(legend.position="none")
-  return(p)
-}
-
 plot_speaker_conditions <- function(data) {
   df <- data %>% mutate(p=round(as.numeric(p), 2),
                         utterance=as.character(utterance))
