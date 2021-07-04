@@ -2,7 +2,6 @@
 //     "verbose": [true],
 //   "utt": ["E > S"],
 //   "alpha": [5],
-//   "cost_conditional": [0],
 //   "prior_pe": [0.2]
 // }
 
@@ -12,19 +11,15 @@ var causal_nets = {"cn1": "E || S>C", "cn2": "E>S>C"}
 var prior_cns = Categorical({"vs": ["cn1", "cn2"], "ps": [0.95, 0.05]})
 var powerset = get_var_powerset(vars, false)
 var utterances = make_utterances(powerset)
-var BIAS = ""
-globalStore.bias = BIAS
 
 var verbose = data["verbose"][0]
 var prior_pe = data["prior_pe"][0]
 var utt = data["utt"][0]
 var LEVEL_MAX = data["level_max"] ? data["level_max"][0] : "PL"
-globalStore.cost_conditional = data["cost_conditional"][0]
 globalStore.alpha = data["alpha"][0]
 
 if(verbose){
   display("alpha:" + globalStore.alpha)
-  display("cost conditional:" + globalStore.cost_conditional)
   display('all utterances:' + utterances.length)
   display("prior P(E):" + prior_pe)
   display("listener hears utterance: " + utt)

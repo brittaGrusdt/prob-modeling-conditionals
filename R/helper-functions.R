@@ -85,6 +85,53 @@ chunk_cns <- function(data) {
   return(data)
 }
 
+#@arg tables: with columns AC, A-C, -AC, -A-C
+table_to_utts = function(tables, theta){
+  tbls = tables %>% add_probs() %>%
+    mutate(literal.a=case_when(p_a >= theta ~ "A",
+                               p_na >= theta ~ "-A",
+                               T ~ ""),
+           literal.c = case_when(p_c >= theta ~ "C",
+                                 p_nc >= theta ~ "-C",
+                                 T~"")) %>%
+    pivot_longer(cols=starts_with("literal"), names_to="literal.tmp",
+                 values_to="literal") %>%
+    
+    mutate(conjunction=case_when(AC >= theta ~ "AC",
+                                 `A-C` >= theta ~ "A-C",
+                                 `-AC` >= theta ~ "-AC", 
+                                 `-A-C` >= theta ~ "-A-C", 
+                                 T ~ ""),
+           likely.a=case_when(p_a >= 0.5 ~ "likely A",
+                            p_na >= 0.5 ~ "likely -A",
+                            T ~ ""),
+           likely.c=case_when(p_c >= 0.5 ~ "likely C",
+                              p_nc >= 0.5 ~ "likely -C",
+                              T ~ "")
+           ) %>%
+    dplyr::select(-`literal.tmp`, -p_a, -p_na, -p_c, -p_nc) %>% 
+    pivot_longer(cols=starts_with("likely"), names_to="likely.tmp",
+                 values_to="likely") %>%
+    dplyr::select(-`likely.tmp`) %>% 
+    
+    mutate(conditional.ca = case_when(p_c_given_a >= theta ~ "A > C", T ~ ""),
+           conditional.cna = case_when(p_c_given_na >= theta ~ "-A > C", T ~ ""),
+           conditional.nca = case_when(p_nc_given_a >= theta ~ "A > -C", T ~ ""),
+           conditional.ncna = case_when(p_nc_given_na >= theta ~ "-A > -C", T ~ ""),
+           conditional.ac = case_when(p_a_given_c >= theta ~ "C > A", T ~ ""),
+           conditional.anc = case_when(p_a_given_nc >= theta ~ "-C > A", T ~ ""),
+           conditional.nac = case_when(p_na_given_c >= theta ~ "C > -A", T ~ ""),
+           conditional.nanc = case_when(p_na_given_nc >= theta ~ "-C > -A", T ~ "")
+    ) %>% 
+    pivot_longer(cols=starts_with("conditional"), names_to="conditional.tmp",
+                 values_to="conditional") %>% 
+    dplyr::select(bn_id, cn, conjunction, conditional, literal, likely,
+                  AC, `A-C`, `-AC`, `-A-C`)
+  return(tbls)
+}
+
+
+
 
 # Probabilities -----------------------------------------------------------
 #@arg vars: list of variables, if more than one, only states where all hold
@@ -275,9 +322,10 @@ plot_speaker_conditions <- function(data) {
   p <- df %>%
     ggplot(aes(y=utterance, x=p, fill=cn)) +
     guides(fill=guide_legend(title="causal net")) +
-    geom_bar(stat="identity", position=position_dodge())  +
+    geom_bar(stat="identity",
+             position=position_dodge(preserve="single"))  +
     labs(x="proportion", y="best utterance") + theme_minimal() +
-    facet_wrap(~speaker_condition) +
+    facet_wrap(~speaker_condition, labeller=label_parsed) +
     theme(axis.text.y=element_text(), legend.position="top",
           legend.key.size = unit(0.75,"line")) +
     scale_fill_brewer(palette="Dark2")
@@ -356,10 +404,9 @@ voi_default <- function(dat, params){
 acceptability_conditions <- function(data_wide){
   df <- data_wide %>% compute_cond_prob("P(C|A)") %>% rename(p_c_given_a=p) %>% 
     compute_cond_prob("P(C|-A)") %>% rename(p_c_given_na=p) %>%
-    mutate(p_delta=round(p_c_given_a - p_c_given_na, 5),
-           p_nc_given_na=round(1-p_c_given_na, 5),
-           p_rooij=case_when(p_nc_given_na == 0 ~ round(p_delta/0.00001, 5),
-                             TRUE ~ round(p_delta/p_nc_given_na, 5)),
+    mutate(p_delta=p_c_given_a - p_c_given_na,
+           p_nc_given_na=1-p_c_given_na,
+           p_rooij=p_delta/(1-p_c_given_na),
            pc=`AC` + `-AC`,
            p_diff=round(p_c_given_a - pc, 5)) %>%
     select(-p_nc_given_na, -p_c_given_a, -p_c_given_na, -pc)

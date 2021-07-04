@@ -100,24 +100,29 @@ create_tables <- function(params){
 }
 
 tables_to_bns = function(tables, params) {
-  tables.ll = tables %>%
+  tables.ll = tables %>% group_by(table_id) %>%
     pivot_longer(cols=starts_with("logL_"), names_to="ll_cn", values_to="ll")
   # filter out the n worst causal nets, if there are several cns with the same
   # ll, make sure that at least the cn with the best ll is kept!
   # (e.g. for 0.25-0.25-0.25-0.25 ll for all dependent nets identical, but keep ind!)
-  for(i in seq(1, params$cns %>% length() - params$n_best_cns)){
-    tables.ll = tables.ll %>%
-      mutate(worst_ll=min(ll), best_ll=max(ll)) %>%
-      filter(ll!=worst_ll | (best_ll==worst_ll)) %>% select(-worst_ll)
-  }
   tbls = tables.ll  %>%
     mutate(cn=case_when(ll_cn=="logL_ind" ~ "A || C",
                         ll_cn=="logL_if_ac" ~ "A implies C",
                         ll_cn=="logL_if_ca" ~ "C implies A",
                         ll_cn=="logL_if_anc" ~ "A implies -C",
                         ll_cn=="logL_if_cna" ~ "C implies -A")) %>%
-    select(-ll_cn, -ind.lower, -ind.upper, -best_ll)
-  return(tbls)
+    dplyr::select(-ll_cn, -ind.lower, -ind.upper) %>% 
+    group_by(table_id) %>% mutate(best.cn=ll==max(ll)) %>%
+    arrange(desc(ll)) %>% mutate(rank=seq(1:n()))
+  
+  bns = tbls %>%
+    mutate(bn_id=case_when(
+      cn=="A || C" ~ paste(table_id, "independent", sep="_"),
+      TRUE ~ paste(table_id, str_replace_all(cn, " ", ""), sep="_")
+    )) %>% group_by(bn_id) %>% ungroup() %>%
+    filter(rank <= params$n_best_cns) %>%
+    dplyr::select(bn_id, table_id, ps, vs, ll, cn, cn.orig)
+  return(bns)
 }
 
 unnest_tables <- function(tables){
@@ -161,8 +166,12 @@ plot_tables <- function(data){
 }
 
 # plot densities of generated tables for different causal nets
-plot_tables_cns <- function(tables_path, plot_dir, w, h){
-  tables.wide <- readRDS(tables_path) %>% unnest_tables() %>% ungroup() %>%
+# @arg tables: long format
+plot_tables_cns <- function(tables_path, plot_dir, w, h, tables=NA){
+  if(is.na(tables)){
+    tables <- readRDS(tables_path)
+  }
+  tables.wide <- tables %>% unnest_tables() %>% ungroup() %>%
     select(-table_id) %>% group_by(rowid) %>% 
     pivot_wider(names_from = cell, values_from = val)
   tables.long <- tables.wide %>% 
@@ -195,7 +204,8 @@ plot_tables_cns <- function(tables_path, plot_dir, w, h){
       ggtitle(cns.expr[[i]])
     all_plots[[i]] = p
     
-    save_to = paste(plot_dir, paste("tables-", cns.short[[i]], ".png", sep=""), sep=SEP)
+    save_to = paste(plot_dir, paste("tables-", cns.short[[i]], ".png", sep=""),
+                    sep=SEP)
     ggsave(save_to, p, width=w, height=h)
     print(paste('saved to', save_to))
   }

@@ -20,7 +20,7 @@ structure_bns <- function(posterior, params){
   data.long <- posterior$bns %>% rowid_to_column(var = "rowid") %>%
     unnest(c(table.probs, table.support)) %>%
     rename(val=table.probs, cell=table.support) %>%
-    add_column(bias=params$bias, level=params$level_max)
+    add_column(level=params$level_max)
 
   if(params$add_accept_conditions){
     df_wide <- data.long %>% spread(key=cell, val=val)
@@ -53,8 +53,7 @@ run_webppl <- function(path_wppl_file, params){
 }
 
 structure_listener_data <- function(posterior, params, tbls.map=NA){
-  df_long <- posterior %>% webppl_distrs_to_tibbles() %>%
-              add_column(bias=params$bias)
+  df_long <- posterior %>% webppl_distrs_to_tibbles()
   if(params$add_accept_conditions){
     df_wide <- df_long %>% spread(key=cell, val=val)
     df <- acceptability_conditions(df_wide)
@@ -119,24 +118,25 @@ webppl_speaker_distrs_to_tibbles <- function(posterior){
   return(speaker_wide)
 }
 
-structure_speaker_data <- function(posterior, params, tbls.map){
-  speaker_wide <- webppl_speaker_distrs_to_tibbles(posterior)
-  bns = posterior$bns %>% rowid_to_column() %>% group_by(rowid) %>%
+structure_speaker_data <- function(posterior, params, tbls.map=NA){
+  posterior_dist = posterior$distributions
+  speaker_wide <- webppl_speaker_distrs_to_tibbles(posterior_dist)
+  bns = posterior_dist$bns %>% rowid_to_column() %>% group_by(rowid) %>%
     unnest(c(table.probs, table.support)) %>%
     pivot_wider(names_from=table.support, values_from=table.probs) %>%
     select(-cn);
   df.wide = left_join(speaker_wide %>% select(-`AC`, -`A-C`, -`-AC`, -`-A-C`),
                       bns, by = "rowid")
   df <- acceptability_conditions(df.wide)
-  df <- df %>% group_by(rowid) %>% 
+  df <- df %>% group_by(rowid) %>%
     pivot_longer(cols=c(-rowid, -bn_id, -starts_with("cell."), 
                         -p_delta, -p_rooij, -p_diff,
                         -level, -cn, -`AC`, -`A-C`, -`-AC`, -`-A-C`),
-                  names_to = "utterance", values_to = "probs") %>%
-        add_column(bias=params$bias)
-  
-  sp = left_join(df, tbls.map, by="bn_id")
-  
+                  names_to = "utterance", values_to = "probs")
+  if(!is.na(tbls.map)){
+    sp = left_join(df, tbls.map, by="bn_id")
+  } else { sp = df}
+
   if(params$save){
     sp %>% save_data(params$target)
     params %>% save_data(params$target_params)
@@ -148,9 +148,10 @@ structure_speaker_data <- function(posterior, params, tbls.map){
 average_speaker <- function(distrs, params){
   data <- distrs %>% group_by(utterance)
   data.cns <- distrs %>% group_by(utterance, cn)
-  df <- data %>% summarise(avg=mean(probs)) %>% add_column(bias=params$bias)
-  df_cns <- data.cns %>% summarise(avg=round(mean(probs), 3), .groups="keep") %>%
-    add_column(bias=params$bias) %>% arrange(avg)
+  df <- data %>% summarise(avg=mean(probs))
+  df_cns <- data.cns %>%
+    summarise(avg=round(mean(probs), 3), .groups="keep") %>%
+    arrange(avg)
 
   if(params$save){
     fn <- str_split(params$target, ".rds")

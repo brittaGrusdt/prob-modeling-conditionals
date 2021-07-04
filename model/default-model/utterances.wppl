@@ -1,36 +1,19 @@
 globalStore.thresholds = {theta: data["theta"][0], theta_likely : 0.5}
 var verbose = data["verbose"][0]
-var variables = data["vars"]
-var bias = data["bias"][0]
-globalStore.bias = bias
-var tables_list = data["tables"]
-globalStore.cns = data["cns"]
+globalStore.indep_sigma = data["indep_sigma"][0]
+globalStore.n_prior_samples = data["n_forward_samples"][0]
 
-globalStore.bns = map(function(obj){
-  var p = Categorical({"vs": obj["vs"], "ps": obj["ps"]})
-  // display(obj["likelihood_if1"])
-  return {
-    id: obj["bn_id"], Table: p, ll: obj.ll, cn: obj.cn
-  }
-}, tables_list)
+globalStore.state_prior = state_prior()
 
 if(verbose){
-  display("bias: " + bias)
   display("theta: " + globalStore.thresholds.theta)
-  display("# tables: " + globalStore.bns.length)
-  display("vars: " + variables)
+  display("#forward samples: " + globalStore.n_prior_samples)
+  display("variables: " + globalStore.variables)
 }
 
 var variables = reduce(function(token, acc){
   acc.concat([[token, negate(token)]])
-}, [], variables)
-
-var dependent_nets = _.without(globalStore.cns, "A || C")
-globalStore.dep_cns = dependent_nets;
-
-if(verbose){
-  display('# cns: ' + globalStore.cns.length)
-}
+}, [], globalStore.variables)
 
 var powerset = get_var_powerset(variables, false)
 var utterances = make_utterances(powerset)
@@ -40,7 +23,7 @@ if(verbose){
   display('# all utterances: ' + utterances.length)
 }
 
-var all_states = state_prior(bias).support()
+var all_states = globalStore.state_prior.support()
 if(verbose){
   display('# states: ' + all_states.length)
 }

@@ -13,7 +13,7 @@ get_douven_data_evs <- function(params){
     dir.create(params$target_dir, recursive=TRUE)
   }
   data <- run_webppl(params$model_path, params) %>%
-    structure_listener_data(params) %>% select(-bias) %>%
+    structure_listener_data(params) %>%
     group_by(cn, cell, level) %>% summarise(ev=sum(prob*val))
   return(data)
 }
