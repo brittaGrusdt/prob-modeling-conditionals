@@ -86,7 +86,7 @@ sp.best.conditions <- data.speaker.best %>%
   select(-certainA, -certainC, -certain, -uncertain) %>%
   chunk_utterances()
 
-df <- sp.best.conditions %>%
+sp.best.conditions.chunked <- sp.best.conditions %>%
   chunk_cns() %>% 
   group_by(speaker_condition, cn, utterance) %>%
   dplyr::select(cn, utterance, speaker_condition, n_sampled) %>%
@@ -95,21 +95,33 @@ df <- sp.best.conditions %>%
   mutate(cn = factor(cn, levels=c("A,C independent", "A,C dependent")),
          speaker_condition=factor(speaker_condition,
                                   levels=c("certain", "uncertain", "xor")))
-levels(df$speaker_condition) <-
+levels(sp.best.conditions.chunked$speaker_condition) <-
   c("certain" = expression(atop("A,C certain")),
     "uncertain" = expression(atop("A,C uncertain")),
     "xor" = expression(atop("A xor C certain")))
 
-p = plot_speaker_conditions(df)
+p = plot_speaker_conditions(sp.best.conditions.chunked)
 ggsave(paste(plot_dir, "speaker_freq_best_un_certain_other.png", sep=SEP),
        width=7, height=2.5)
-# some checks
-dat.utts = table_to_utts(sp.best.conditions, params$theta)
-# 1. check A,C uncertain + independent + best utterance is conditional
+
+# 1.check ratios of utterance types when uncertain
+sp.best.conditions.chunked %>% filter(cn=="A,C independent")
+sp.best.conditions.chunked %>% filter(cn=="A,C dependent")
+
+# 2.check A,C uncertain + independent + best utterance is conditional.
+# almost true states?
 check = sp.best.conditions %>% 
   filter(sp_condition=="uncertain" & utterance == "conditional" & cn=="A || C") %>%
-  ungroup() %>% dplyr::select(bn_id) %>% distinct() %>% pull(bn_id)
-dat.utts %>% filter(bn_id %in% check)
+  mutate(pa=`AC`+`A-C`, pc=`AC`+`-AC`, pna=`-AC`+`-A-C`, pnc=`A-C`+`-A-C`) %>%
+  select(bn_id, pa, pc, pna, pnc) %>% 
+  pivot_longer(cols=c(-bn_id), names_to="p", values_to="val") %>%
+  arrange(desc(val)) %>% 
+  distinct_at(vars(c("bn_id")), .keep_all = TRUE)
+
+ratio.almost_true = nrow(check %>% filter(val>=0.85)) / nrow(check)
+print(paste('ratio pragmatic speaker cn=ind. + literal almost true (p>=0.85):',
+            ratio.almost_true))
+check %>% filter(val<0.85)
 
 # Figure 4+5 ----------------------------------------------------------------
 data.cp = data_cp_plots(params) 
@@ -203,60 +215,50 @@ p = plot_accept_conditions(df %>% filter(condition == "p_rooij"))
 ggsave(paste(plot_dir, "accept-conditions.png", sep=SEP), p, width=7, height=3)
 
 # -------------- additional checks on tables of pragmatic speaker condition
-prag.ind= speaker.pragmatic %>% filter(cn=="A || C" & probs>0) 
-# analyze prior given tables where no literal no conjunction is true
-prior = data %>% filter(level=="prior") %>%
-  pivot_wider(names_from="cell", values_from="val")
+prag.ind= speaker.pragmatic %>% filter(cn=="A || C") 
+sp.prag.ratio.ind = nrow(prag.ind) / nrow(speaker.pragmatic)
+print(paste('ratio pragmatic speaker cn = independent:', sp.prag.ratio.ind))
 
-# A->C is applicable and neither conj nor literal true
-prior.unc = prior %>%
-  mutate(conj=AC>theta | `A-C`>theta | `-AC`>theta | `-A-C`>theta,
-         lit=(AC+`A-C` > theta) | (AC+`-AC`>theta) |
-           (AC+`A-C` < 1-theta) | (AC+`-AC`<1-theta)) %>%
-  filter(!conj &!lit) %>% ungroup() %>%
-  filter(AC/(AC+`A-C`) > theta)
-
-ids = prior.unc %>% filter(cn=="A || C") %>% pull(bn_id)
-ratio = nrow(prag.ind %>% filter(bn_id %in% ids)) / nrow(prag.ind)
-print(paste("in", ratio*100, '% of cases, neither conjunction nor literal applicable'))
-
-# some checks
-speaker.pragmatic %>% filter(condition=="p_rooij" & val >0.9) %>% nrow() /
-  (speaker.pragmatic %>% filter(condition=="p_rooij") %>% nrow())
-speaker.literal %>% filter(condition=="p_rooij" & val<0) %>% nrow() /
-  (speaker.literal %>% filter(condition=="p_rooij") %>% nrow())
-
-prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / (prior  %>% nrow())
-prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / (prior  %>% nrow())
-
-# Check almost true states Appendix
-df= speaker.pragmatic %>% filter(cn=="A || C") %>% select(-utterance) %>% 
-  ungroup()
-df.lit = df %>% group_by(bn_id) %>% 
+# Check almost true states
+prag.ind.probs = prag.ind %>% dplyr::select(-utterance) %>% group_by(bn_id) %>% 
   mutate(pa=`AC`+`A-C`, pc=`AC`+`-AC`, pna=`-AC`+`-A-C`, pnc=`A-C`+`-A-C`) %>%
   select(bn_id, pa, pc, pna, pnc) %>% 
   pivot_longer(cols=c(-bn_id), names_to="p", values_to="val") %>%
   arrange(desc(val)) %>% 
   distinct_at(vars(c("bn_id")), .keep_all = TRUE)
-df.almost_true = df.lit %>% filter(val>=0.85) 
+df.almost_true = prag.ind.probs %>% filter(val>=0.85) 
+ratio.almost_true = nrow(df.almost_true) / prag.ind.probs %>% nrow()
+print(paste('ratio pragmatic speaker cn=ind. + literal almost true (p>=0.85):',
+            ratio.almost_true))
 
-nrow(df.almost_true) / df.lit %>% nrow()
+# some more checks
+speaker.pragmatic %>% filter(condition=="p_rooij" & val >0.9) %>% nrow() /
+  (speaker.pragmatic %>% filter(condition=="p_rooij") %>% nrow())
+speaker.literal %>% filter(condition=="p_rooij" & val<0) %>% nrow() /
+  (speaker.literal %>% filter(condition=="p_rooij") %>% nrow())
+
+prior = data %>% filter(level=="prior") %>%
+  pivot_wider(names_from="cell", values_from="val")
+prior %>% filter(p_rooij < 0) %>% ungroup() %>% nrow() / (prior  %>% nrow())
+prior %>% filter(p_rooij > 0.9) %>% ungroup() %>% nrow() / (prior  %>% nrow())
+
+# analyze prior given tables where no literal no conjunction is true
+# A->C is applicable and neither conj nor literal true
+# prior.unc = prior %>%
+#   mutate(conj=AC>theta | `A-C`>theta | `-AC`>theta | `-A-C`>theta,
+#          lit=(AC+`A-C` > theta) | (AC+`-AC`>theta) |
+#              (AC+`A-C` < 1-theta) | (AC+`-AC`<1-theta)) %>%
+#   filter(!conj &!lit) %>% ungroup() %>%
+#   filter(AC/(AC+`A-C`) > theta)
+# 
+# ids = prior.unc %>% filter(cn=="A || C") %>% pull(bn_id)
+# ratio = nrow(prag.ind %>% filter(bn_id %in% ids)) / nrow(prag.ind)
+# print(paste("in", ratio*100, '% of cases, neither conjunction nor literal applicable'))
+
+
 
 # Figure 7 ----------------------------------------------------------------
-# V1: speaker results (not literal speaker condition, just samples from prior)
-# df.sp <- read_rds(params.speaker$target) %>%
-#   select(-level, -p_delta, -p_diff) %>% ungroup() %>% 
-#   mutate(utterance = paste("utt", utterance, sep="_")) %>% 
-#   filter(AC/(AC+`A-C`)>=0.8) %>% 
-#   group_by(rowid) %>% 
-#   mutate(p_best=max(probs), u_best = probs == p_best) %>% 
-#   filter(u_best) %>% 
-#   filter(p_rooij >= 0.8 & utterance != "utt_A > C") %>% 
-#   select(-p_best, -u_best) %>%
-#   mutate(utterance = str_replace(utterance, "utt_", "")) %>% 
-#   chunk_utterances(c("-C > -A", "-A > -C", "C > A"))
-
-# V2: best or second best utterance if best is not A>C
+# use best or second best utterance if best is not A>C
 # df.sp = speaker.literal %>%
 #   filter(condition=="p_rooij" & val >= 0.9 & utterance != "utt_A > C") %>%
 #   group_by(rowid) %>%
@@ -274,7 +276,6 @@ df.sp = speaker.literal %>%
   select(-p_best, -u_best) %>%
   mutate(utterance = str_replace(utterance, "utt_", "")) %>%
   chunk_utterances()
-
 # frequency of each utterance type for these states
 df.sum <- df.sp %>% group_by(utterance, cn) %>%
   summarise(count=n(), .groups = "drop_last") %>%
