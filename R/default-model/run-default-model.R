@@ -61,6 +61,5 @@ for(i in seq(1,4)){
       data <- structure_bns(posterior, params)
   } else {
     data <- posterior %>% structure_listener_data(params)
-    data_voi <- voi_default(data, params)
   }
 }

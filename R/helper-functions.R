@@ -1,3 +1,16 @@
+labels.cp = list(
+  "A,C indep." = "A,C indep.",
+  "A -> C" = expression(A %->% C),
+  "A -> ¬C" = expression(A%->%~"¬C"),
+  "C -> A" = expression(C %->% A),
+  "C -> ¬A" = expression(C%->%~"¬A"),
+  # "A,C indep." = "A,C indep.",
+  "A implies C" = expression(A %->% C),
+  "A implies ¬C" = expression(A%->%~"¬C"),
+  "C implies A" = expression(C %->% A),
+  "C implies ¬A" = expression(C%->%~"¬A")
+)
+
 save_data <- function(data, target_path){
   data %>% write_rds(target_path)
   print(paste("saved to:", target_path))
@@ -224,72 +237,64 @@ plot_speaker_conditions <- function(data) {
   return(p)
 }
 
-# @arg posterior: in long format, must have columns *cell* and *val*
-voi_default <- function(dat, params){
-  df.wide = dat %>% ungroup() %>% dplyr::select(-starts_with("p_")) %>%
-    group_by(bn_id, level) %>%
-    pivot_wider(names_from="cell", values_from="val") %>%
-    add_probs() %>% dplyr::select(!starts_with("p_likely")) %>%
-    group_by(level)
+data_cp_plots <- function(params, data=NA){
   
-  theta=params$theta
-  df = df.wide %>% mutate(uncertainty =
-    case_when((p_a<theta & p_a>1-theta) & (p_c<theta & p_c>1-theta) ~ "both",
-            (p_a<theta & p_a>1-theta) ~ "only A",
-            (p_c<theta & p_c>1-theta) ~ "only C",
-            TRUE ~ "none")) 
+  if(is.na(data)) data <- read_rds(params$target)
+  data <- data %>% ungroup() %>% group_by(bn_id, level) %>%
+    select(-p_delta, -p_rooij, -p_diff)
+  data.wide <- data %>%
+    pivot_wider(names_from = "cell", values_from = "val") %>% 
+    compute_cond_prob("P(-C|-A)") %>%  rename(`-C_-A` = p) %>% 
+    compute_cond_prob("P(A|C)") %>% rename(`A_C` = p)
   
-  # bns where certain about both (=uncertain about none) is true
-  df.certain_both = df %>% filter(uncertainty == "none") %>%
-    summarize(ev=sum(prob), .groups="drop_last") %>% 
-    add_column(key="uncertain_none")
+  # Expected values for P(-C|-A) and P(A|C) and for causal nets
+  ev_nc_na = data.wide %>% rename(p=`-C_-A`) %>% expected_val("P(-C|-A)")
+  ev_a_c = data.wide %>% rename(p=`A_C`) %>% expected_val("P(A|C)") 
+  ev_probs <- bind_rows(ev_a_c, ev_nc_na) %>%
+    mutate(level=factor(level, levels=c("PL", "LL", "prior")),
+           p=str_replace_all(p, "-", "¬")) %>%
+    rename(val_type=p) %>% add_column(val="p")
   
-  df.uncertain_only_a = df %>% filter(uncertainty == "only A") %>%
-    summarize(ev=sum(prob), .groups="drop_last") %>%
-    add_column(key="uncertain_only_A")
+  ev_cns = data.wide %>% ungroup() %>% group_by(level, cn) %>% 
+    summarise(ev=sum(prob), .groups="drop_last") %>%
+    mutate(level=factor(level, levels=c("PL", "LL", "prior")),
+           cn=case_when(cn=="A || C" ~ "A,C indep.", TRUE ~ cn),
+           cn=str_replace(cn, "-", "¬"),
+           cn=str_replace(cn, "implies", "->")
+    ) %>%
+    rename(val_type=cn) %>% add_column(val="cns")
   
-  df.uncertain_only_c = df %>% filter(uncertainty == "only C") %>%
-    summarize(ev=sum(prob), .groups="drop_last") %>%
-    add_column(key="uncertain_only_C")
+  cns <- c("A -> ¬C", "C -> ¬A", "C -> A", "A -> C", "A,C indep.")
+  data <- bind_rows(ev_probs, ev_cns) %>% 
+    mutate(val_type=factor(val_type, levels=c(c("P(A|C)", "P(¬C|¬A)"), cns)))
   
-  df.uncertain_both = df %>% filter(uncertainty == "both") %>%
-    summarize(ev=sum(prob), .groups="drop_last") %>%
-    add_column(key="uncertain_both")
-  
-  # expected values
-  evs = df.wide %>%
-    transmute(ev_a=prob*p_a, ev_c=prob*p_c, ev_a_given_c = prob * p_a_given_c,
-              ev_nc_given_na= prob * p_nc_given_na) %>%
-    summarize(ev_a=sum(ev_a), ev_c=sum(ev_c), ev_a_given_c=sum(ev_a_given_c),
-              ev_nc_given_na=sum(ev_nc_given_na), .groups="keep") %>%
-    pivot_longer(cols=c("ev_a", "ev_c", "ev_a_given_c", "ev_nc_given_na"),
-                 names_to="key", values_to="ev")
-  
-  results <- bind_rows(df.uncertain_both, df.uncertain_only_a,
-                       df.uncertain_only_c, df.certain_both, evs)
-  if(params$level_max == "prior"){
-    levels = c("prior")
-  } else {
-    levels = c("prior", "LL", "PL")
-  }
-  results = results %>% filter(level %in% levels)
-  
-  if(params$add_accept_conditions) {
-    df=dat %>% ungroup %>% select(bn_id, cn, p_rooij, p_delta, level, prob) %>% 
-      distinct() %>% group_by(bn_id, level) %>%
-      pivot_longer(cols=c(p_rooij, p_delta), names_to="accept.cond", values_to="val") %>%
-      group_by(level, accept.cond, cn) %>% 
-      summarize(ev=sum(prob*val), .groups="drop_last") %>% 
-      unite("key", accept.cond, cn)
-    results = bind_rows(results, df %>% filter(level %in% levels))
-  }
-  
-  if(params$save){
-    results %>%
-      save_data(paste(str_replace(params$target, ".rds", "-vois.rds"), sep=""))
-  }
-  return(results)
+  return(data)  
 }
+
+plot_cp_cns <- function(cp.cns, labels){
+  p.cns <- cp.cns %>% 
+    ggplot(aes(y=level, x=ev, fill=val_type)) + 
+    geom_bar(position=position_stack(), stat="identity") +
+    scale_fill_brewer(palette="Dark2", name="causal net", labels=labels) +
+    labs(x="Degree of belief", y="Interpretation level") +
+    theme_minimal() +
+    theme(legend.position="top", legend.key.size = unit(0.75,"line")) +
+    guides(fill=guide_legend(reverse = TRUE))
+  return(p.cns)
+}
+
+plot_cp_probs <- function(data.cp){
+  p.probs <- data.cp %>% filter(val=="p") %>% 
+    ggplot(aes(y=level, x=ev, fill=val_type)) + 
+    geom_bar(position=position_dodge(), stat="identity") +
+    scale_fill_brewer(palette="Dark2", name="value") +
+    labs(x="Degree of belief", y="Interpretation level") +
+    theme_minimal() +
+    theme(legend.position="top", legend.key.size = unit(0.75,"line")) +
+    guides(fill=guide_legend(reverse = TRUE))
+  return(p.probs)
+}
+
 # Acceptability/Assertability conditions ----------------------------------
 # p_rooij: (P(e|i) - P(e|¬i)) / (1-P(e|¬i))
 # p_delta: P(e|i) - P(e|¬i)

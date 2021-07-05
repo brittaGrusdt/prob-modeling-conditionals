@@ -52,7 +52,7 @@ run_webppl <- function(path_wppl_file, params){
   return(data)
 }
 
-structure_listener_data <- function(posterior, params, tbls.map=NA){
+structure_listener_data <- function(posterior, params){
   df_long <- posterior %>% webppl_distrs_to_tibbles()
   if(params$add_accept_conditions){
     df_wide <- df_long %>% spread(key=cell, val=val)
@@ -61,18 +61,11 @@ structure_listener_data <- function(posterior, params, tbls.map=NA){
       pivot_longer(cols=c(AC, `A-C`, `-AC`, `-A-C`),
                    names_to="cell", values_to="val")
   }
-  if(is.na(tbls.map)) {
-    df <- df_long
-  } else {
-    df <- left_join(df_long, tbls.map, by="bn_id") %>%
-      group_by(bn_id) %>% dplyr::select(-rowid)
-  } 
-
   if(params$save){
-    df %>% save_data(params$target)
+    df_long %>% save_data(params$target)
     params %>% save_data(params$target_params)
   }
-  return(df)
+  return(df_long)
 }
 
 
